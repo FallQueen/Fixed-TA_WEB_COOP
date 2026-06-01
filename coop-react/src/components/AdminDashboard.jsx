@@ -13,12 +13,15 @@ import LowonganTab from './adminDashboard/tabs/LowonganTab';
 import PelamarTab from './adminDashboard/tabs/PelamarTab';
 import EvaluasiTab from './adminDashboard/tabs/EvaluasiTab';
 import PengaturanTab from './adminDashboard/tabs/PengaturanTab';
+import AdminFeedbackLayer from './adminDashboard/AdminFeedbackLayer';
 import useResponsiveSidebar from './adminDashboard/hooks/useResponsiveSidebar';
 import useAdminDashboardData from './adminDashboard/hooks/useAdminDashboardData';
 import useStudentActions from './adminDashboard/hooks/useStudentActions';
 import useVacancyPlacementActions from './adminDashboard/hooks/useVacancyPlacementActions';
 import useAdminResourceActions from './adminDashboard/hooks/useAdminResourceActions';
 import useAdminDashboardViewState from './adminDashboard/hooks/useAdminDashboardViewState';
+import { useAdminFeedback } from './adminDashboard/hooks/useAdminFeedback.js';
+import { buildSelectedDetail, isSameStudent } from './adminDashboard/helpers';
 
 const LOADING_STYLE = {
   textAlign: 'center',
@@ -37,6 +40,7 @@ function AdminDashboard() {
     isSidebarCollapsed,
     setIsSidebarCollapsed,
   } = useResponsiveSidebar();
+  const adminFeedback = useAdminFeedback();
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem('token');
@@ -125,6 +129,7 @@ function AdminDashboard() {
     isUpdatingProfile,
     setIsUpdatingProfile,
     filteredPending,
+    filteredInactive,
     overviewStudentsFiltered,
     approvalDataFiltered,
     applicationsFiltered,
@@ -158,12 +163,14 @@ function AdminDashboard() {
     handleToggleUserSelection,
     handleBulkDeleteUsers,
     handleEditStudentSubmit,
+    handleDeleteStudentAccount,
     handleForceResetPassword,
     handleUpdateProfile,
     handleProfileFormChange,
     handleAdminPasswordChange,
     handlePasswordFormChange,
     handleApproveStudent,
+    handleRejectStudent,
     handleApproveAllStudents,
   } = useStudentActions({
     selectedUserIds,
@@ -181,6 +188,7 @@ function AdminDashboard() {
     handleLogout,
     filteredPending,
     setShowIncompleteOnly,
+    feedback: adminFeedback,
   });
 
   const {
@@ -193,6 +201,8 @@ function AdminDashboard() {
     handleCancelEdit,
     handleDeleteVacancy,
     handleUpdateAppStatus,
+    handleArchiveApplication,
+    handleRejectPlacement,
   } = useVacancyPlacementActions({
     placementToApprove,
     setPlacementToApprove,
@@ -210,6 +220,7 @@ function AdminDashboard() {
     setApplications,
     selectedApplication,
     setSelectedApplication,
+    feedback: adminFeedback,
   });
 
   const {
@@ -221,6 +232,9 @@ function AdminDashboard() {
     handleTemplateSubmit,
     getFileName,
     handleExportEvaluations,
+    handleSendCompletionReminders,
+    handleApproveSupervisorChange,
+    handleRejectSupervisorChange,
     handleExportIndustries,
   } = useAdminResourceActions({
     gradeInput,
@@ -241,6 +255,7 @@ function AdminDashboard() {
     industries,
     placements,
     students,
+    feedback: adminFeedback,
   });
 
   useEffect(() => {
@@ -258,6 +273,49 @@ function AdminDashboard() {
       last_name: adminData.last_name || '',
     });
   }, [adminData, setProfileForm]);
+
+  useEffect(() => {
+    if (!selectedDetail?.placement?.id || !selectedDetail?.student?.id) {
+      return;
+    }
+
+    const selectedPlacementId = selectedDetail.placement.id;
+    const selectedStudentId = selectedDetail.student.id;
+    const freshPlacement = placements.find((placement) => String(placement.id) === String(selectedPlacementId));
+    if (!freshPlacement) {
+      setSelectedDetail(null);
+      return;
+    }
+
+    const freshStudent = students.find((student) => isSameStudent(freshPlacement.student, student.id))
+      || students.find((student) => String(student.id) === String(selectedStudentId));
+
+    if (!freshStudent) {
+      return;
+    }
+
+    setSelectedDetail(buildSelectedDetail(
+      freshPlacement,
+      freshStudent,
+      monthlyReports,
+      utsReports,
+      finalReports,
+      evaluations,
+      certificates,
+      placements
+    ));
+  }, [
+    selectedDetail?.placement?.id,
+    selectedDetail?.student?.id,
+    placements,
+    students,
+    monthlyReports,
+    utsReports,
+    finalReports,
+    evaluations,
+    certificates,
+    setSelectedDetail,
+  ]);
 
   useEffect(() => {
     const needsVacancyData = activeTab === 'lowongan' || activeTab === 'pelamar';
@@ -285,11 +343,13 @@ function AdminDashboard() {
         selectedUserIds={selectedUserIds}
         handleBulkDeleteUsers={handleBulkDeleteUsers}
         filteredPending={filteredPending}
+        inactiveApprovalUsers={filteredInactive}
         handleApproveAllStudents={handleApproveAllStudents}
         approvalDataFiltered={approvalDataFiltered}
         handleToggleUserSelection={handleToggleUserSelection}
-        setEditingStudent={setEditingStudent}
         handleApproveStudent={handleApproveStudent}
+        handleRejectStudent={handleRejectStudent}
+        handleDeleteStudentAccount={handleDeleteStudentAccount}
       />
     ),
     overview: (
@@ -303,6 +363,7 @@ function AdminDashboard() {
         monthlyReports={monthlyReports}
         hitungDurasi={hitungDurasi}
         setEditingStudent={setEditingStudent}
+        handleRejectPlacement={handleRejectPlacement}
         openApprovePlacementModal={openApprovePlacementModal}
       />
     ),
@@ -348,6 +409,7 @@ function AdminDashboard() {
         students={students}
         vacancies={vacancies}
         setSelectedApplication={setSelectedApplication}
+        handleArchiveApplication={handleArchiveApplication}
       />
     ),
     evaluasi: (
@@ -360,6 +422,10 @@ function AdminDashboard() {
         evaluasiFiltered={evaluasiFiltered}
         students={students}
         evaluations={evaluations}
+        utsReports={utsReports}
+        finalReports={finalReports}
+        handleApproveSupervisorChange={handleApproveSupervisorChange}
+        handleRejectSupervisorChange={handleRejectSupervisorChange}
       />
     ),
     berkas: (
@@ -375,7 +441,13 @@ function AdminDashboard() {
         berkasFiltered={berkasFiltered}
         students={students}
         certificates={certificates}
+        placements={placements}
+        monthlyReports={monthlyReports}
+        utsReports={utsReports}
+        finalReports={finalReports}
+        evaluations={evaluations}
         openDetailModal={openDetailModal}
+        handleSendCompletionReminders={handleSendCompletionReminders}
       />
     ),
     pengaturan: (
@@ -425,6 +497,7 @@ function AdminDashboard() {
     selectedApplication,
     setSelectedApplication,
     handleUpdateAppStatus,
+    handleArchiveApplication,
     placementToApprove,
     setPlacementToApprove,
     confirmApprovePlacement,
@@ -451,6 +524,7 @@ function AdminDashboard() {
       {activeTabContent[activeTab] || null}
 
       <DashboardModals {...dashboardModalsProps} />
+      <AdminFeedbackLayer feedback={adminFeedback} isMobile={isMobile} />
     </DashboardShell>
   );
 }

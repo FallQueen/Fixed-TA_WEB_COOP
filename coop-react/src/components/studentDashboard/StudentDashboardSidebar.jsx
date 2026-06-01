@@ -96,6 +96,7 @@ export default function StudentDashboardSidebar({
   hasApprovedPlacement,
   hasSeenUas,
   hasSeenUts,
+  isGraduated,
   isMobile,
   isSidebarCollapsed,
   isSidebarOpen,
@@ -108,34 +109,43 @@ export default function StudentDashboardSidebar({
   submittedFinal,
   submittedUts,
 }) {
-  const primaryMenuItems = [
-    { icon: User, label: 'Profil & Dokumen', tabKey: 'profil' },
-    { icon: Bell, label: 'Notifikasi', tabKey: 'notifikasi', badgeCount: notificationCount },
-    { icon: Briefcase, label: 'Bursa Magang', tabKey: 'lowongan' },
-    { icon: Edit3, label: 'Input Lapor Magang', tabKey: 'lapor' },
-    !hasApprovedPlacement && {
-      icon: Activity,
-      label: 'Progress Mingguan',
-      tabKey: 'lapor_mingguan',
-    },
-  ].filter(Boolean);
+  const primaryMenuItems = isGraduated
+    ? [
+      { icon: User, label: 'Profil & Dokumen', tabKey: 'profil' },
+      { icon: Bell, label: 'Notifikasi', tabKey: 'notifikasi', badgeCount: notificationCount },
+    ]
+    : [
+      { icon: User, label: 'Profil & Dokumen', tabKey: 'profil' },
+      { icon: Bell, label: 'Notifikasi', tabKey: 'notifikasi', badgeCount: notificationCount },
+      { icon: Briefcase, label: 'Bursa Magang', tabKey: 'lowongan' },
+      { icon: Edit3, label: 'Input Lapor Magang', tabKey: 'lapor' },
+      !hasApprovedPlacement && {
+        icon: Activity,
+        label: 'Progress Mingguan',
+        tabKey: 'lapor_mingguan',
+      },
+    ].filter(Boolean);
 
-  const evaluationMenuItems = [
-    { icon: Calendar, label: 'Laporan Bulanan', tabKey: 'laporan_bulanan' },
-    isUtsTriggered && {
-      icon: FileText,
-      label: 'Laporan UTS',
-      showBadge: !hasSeenUts && !submittedUts,
-      tabKey: 'laporan_uts',
-    },
-    isUasTriggered && {
-      icon: GraduationCap,
-      label: 'Laporan Akhir',
-      showBadge: !hasSeenUas && !submittedFinal,
-      tabKey: 'laporan_akhir',
-    },
-    { icon: Award, label: 'Sertifikat Kelulusan', tabKey: 'sertifikat' },
-  ].filter(Boolean);
+  const evaluationMenuItems = isGraduated
+    ? [
+      { icon: Award, label: 'Sertifikat Kelulusan', tabKey: 'sertifikat' },
+    ]
+    : [
+      { icon: Calendar, label: 'Laporan Bulanan', tabKey: 'laporan_bulanan' },
+      isUtsTriggered && {
+        icon: FileText,
+        label: 'Laporan UTS',
+        showBadge: !hasSeenUts && !submittedUts,
+        tabKey: 'laporan_uts',
+      },
+      isUasTriggered && {
+        icon: GraduationCap,
+        label: 'Laporan Akhir',
+        showBadge: !hasSeenUas && !submittedFinal,
+        tabKey: 'laporan_akhir',
+      },
+      { icon: Award, label: 'Sertifikat Kelulusan', tabKey: 'sertifikat' },
+    ].filter(Boolean);
 
   return (
     <>
@@ -202,12 +212,12 @@ export default function StudentDashboardSidebar({
               />
             ))}
 
-            {hasApprovedPlacement && (
+            {(hasApprovedPlacement || isGraduated) && (
               <>
                 <SidebarSectionTitle
                   isMobile={isMobile}
                   isSidebarCollapsed={isSidebarCollapsed}
-                  label="Evaluasi"
+                  label={isGraduated ? 'Kelulusan' : 'Evaluasi'}
                   styles={styles}
                 />
 

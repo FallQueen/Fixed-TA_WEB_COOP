@@ -1,20 +1,28 @@
-import { Activity, CheckCircle, Eye, FileCheck2, FileEdit, Upload } from 'lucide-react';
+import { Activity, CheckCircle, Eye, FileCheck2, FileEdit, Mail, Upload } from 'lucide-react';
 import {
+  actionButtonGroup,
+  actionCell,
+  actionIconButton,
   badge,
   compactButton,
   emptyState,
   innerPanel,
+  metricTone,
   metricCard,
   metricGrid,
   tabPageHeader,
   tabSubtitle,
   tabTitle,
   tableShell,
+  toolbar,
 } from './sharedTabStyles';
 import GuidancePanel from './GuidancePanel';
 import PaginationControls from './PaginationControls';
+import ProgressStatusPanel from './ProgressStatusPanel';
 import StatusSegmentedControl from './StatusSegmentedControl';
 import usePagedData from './usePagedData';
+import PlacementCompanyCell from './PlacementCompanyCell';
+import { getCertificateForPlacement, getCertificateIssueMissingFields, isSameStudent } from '../helpers';
 
 function BerkasTab({
   styles,
@@ -29,12 +37,27 @@ function BerkasTab({
   berkasFiltered,
   students,
   certificates,
+  placements,
+  monthlyReports,
+  utsReports,
+  finalReports,
+  evaluations,
   openDetailModal,
+  handleSendCompletionReminders,
 }) {
   const certifiedCount = berkasFiltered.filter((placement) => (
-    certificates.some((certificate) => (certificate.placement?.id || certificate.placement) === placement.id)
+    Boolean(getCertificateForPlacement(certificates, placement))
   )).length;
   const waitingCount = berkasFiltered.length - certifiedCount;
+  const getMissingFields = (placement) => (
+    getCertificateIssueMissingFields(placement, monthlyReports, utsReports, finalReports, evaluations, placements)
+  );
+  const incompleteCount = berkasFiltered.filter((placement) => (
+    !getCertificateForPlacement(certificates, placement) && getMissingFields(placement).length > 0
+  )).length;
+  const certificateProgressPercent = berkasFiltered.length > 0
+    ? Math.round((certifiedCount / berkasFiltered.length) * 100)
+    : 100;
   const {
     page,
     pageSize,
@@ -45,10 +68,10 @@ function BerkasTab({
   } = usePagedData(berkasFiltered);
 
   const metrics = [
-    { icon: FileEdit, label: 'Template Aktif', value: [currentTemplates?.uts_template, currentTemplates?.uas_template].filter(Boolean).length, tint: '#eef2ff', color: '#4f46e5' },
-    { icon: FileCheck2, label: 'Siap Direview', value: berkasFiltered.length, tint: '#fff7ed', color: '#f97316' },
-    { icon: CheckCircle, label: 'Sertifikat Terbit', value: certifiedCount, tint: '#ecfdf5', color: '#10b981' },
-    { icon: Activity, label: 'Menunggu Evaluasi', value: waitingCount, tint: '#fff1f2', color: '#f43f5e' },
+    { icon: FileEdit, label: 'Template Aktif', value: [currentTemplates?.uts_template, currentTemplates?.uas_template].filter(Boolean).length, ...metricTone('info') },
+    { icon: FileCheck2, label: 'Siap Direview', value: berkasFiltered.length, ...metricTone('warning') },
+    { icon: CheckCircle, label: 'Sertifikat Terbit', value: certifiedCount, ...metricTone('success') },
+    { icon: Activity, label: 'Belum Lengkap', value: incompleteCount, ...metricTone('danger') },
   ];
 
   const renderTemplateForm = (type, currentFile) => (
@@ -122,7 +145,26 @@ function BerkasTab({
             <p style={tabSubtitle}>Review rekap tugas akhir mahasiswa sebelum status kelulusan disahkan.</p>
           </div>
 
+          {incompleteCount > 0 && (
+            <div style={toolbar(isMobile)}>
+              <button className="btn-hover" onClick={() => handleSendCompletionReminders()} style={compactButton(styles, 'warning', { height: '42px', width: isMobile ? '100%' : 'auto' })}>
+                <Mail size={15} /> Reminder Semua Belum Lengkap ({incompleteCount})
+              </button>
+            </div>
+          )}
         </div>
+
+        <ProgressStatusPanel
+          isMobile={isMobile}
+          icon={FileCheck2}
+          label="Progress Sertifikasi"
+          title={waitingCount > 0 ? `${waitingCount} mahasiswa masih menunggu penerbitan sertifikat` : 'Semua mahasiswa pada filter ini sudah tersertifikasi'}
+          description="Progress dihitung dari penempatan yang sudah memiliki sertifikat Co-op terbit."
+          percent={certificateProgressPercent}
+          tone={waitingCount > 0 ? 'warning' : 'success'}
+          meta={`${certifiedCount}/${berkasFiltered.length} sertifikat terbit`}
+          percentLabel="terbit"
+        />
 
         <div style={{ marginBottom: '22px' }}>
           <StatusSegmentedControl
@@ -144,21 +186,22 @@ function BerkasTab({
                 <th style={{ ...styles.th, borderTopLeftRadius: '16px' }}>Mahasiswa</th>
                 <th style={styles.th}>Perusahaan</th>
                 <th style={styles.th}>Status Akhir</th>
-                <th style={{ ...styles.th, borderTopRightRadius: '16px' }}>Aksi</th>
+                <th style={{ ...styles.th, ...actionCell, borderTopRightRadius: '16px' }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
               {pagedBerkas.map((placement) => {
-                const student = students.find((item) => item.id === placement.student);
+                const student = students.find((item) => isSameStudent(placement.student, item.id));
                 if (!student) return null;
-                const mhsCert = certificates.find((certificate) => (certificate.placement?.id || certificate.placement) === placement.id);
+                const mhsCert = getCertificateForPlacement(certificates, placement);
+                const missingFields = getMissingFields(placement);
                 return (
                   <tr key={placement.id} style={styles.tr}>
                     <td style={styles.td}>
                       <strong style={{ color: '#111827', fontSize: '13px', textTransform: 'capitalize' }}>{student.first_name} {student.last_name}</strong><br />
                       <span style={{ fontSize: '11px', color: '#64748b' }}>{student.nim} | <span style={{ textTransform: 'capitalize' }}>{student.program_studi}</span></span>
                     </td>
-                    <td style={styles.td}>{placement.company_name}</td>
+                    <td style={styles.td}><PlacementCompanyCell placement={placement} /></td>
                     <td style={styles.td}>
                       {mhsCert ? (
                         <span style={badge('success')}><CheckCircle size={13} /> Lulus (Grade: <span style={{ textTransform: 'uppercase' }}>{mhsCert.grade}</span>)</span>
@@ -166,10 +209,29 @@ function BerkasTab({
                         <span style={badge('neutral')}><Activity size={13} /> Menunggu Evaluasi</span>
                       )}
                     </td>
-                    <td style={styles.td}>
-                      <button className="btn-hover" onClick={() => openDetailModal(placement, student)} style={compactButton(styles, 'primary', { width: isMobile ? '100%' : 'auto' })}>
-                        <Eye size={14} /> Review & Luluskan
-                      </button>
+                    <td style={{ ...styles.td, ...actionCell }}>
+                      <div style={actionButtonGroup(isMobile)}>
+                        {!mhsCert && missingFields.length > 0 && (
+                          <button
+                            className="btn-hover"
+                            onClick={() => handleSendCompletionReminders(placement.id)}
+                            style={actionIconButton('warning')}
+                            title="Kirim reminder kelengkapan"
+                            aria-label={`Kirim reminder kelengkapan ke ${student.first_name || student.email || 'mahasiswa'}`}
+                          >
+                            <Mail size={15} />
+                          </button>
+                        )}
+                        <button
+                          className="btn-hover"
+                          onClick={() => openDetailModal(placement, student)}
+                          style={actionIconButton('primary')}
+                          title="Review dan luluskan"
+                          aria-label={`Review sertifikasi ${student.first_name || student.email || 'mahasiswa'}`}
+                        >
+                          <Eye size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

@@ -25,6 +25,7 @@ function useStudentDashboardData({ activeTab, navigate, onUnauthorized }) {
   const [loadingVacancies, setLoadingVacancies] = useState(false);
 
   const [applicationForm, setApplicationForm] = useState({ ...EMPTY_APPLICATION_FORM });
+  const [studentApplications, setStudentApplications] = useState([]);
   const [submittingApplication, setSubmittingApplication] = useState(false);
 
   const [files, setFiles] = useState({ cv_file: null, portofolio_file: null });
@@ -97,6 +98,11 @@ function useStudentDashboardData({ activeTab, navigate, onUnauthorized }) {
         headers: createAuthHeaders(),
       });
 
+      if (response.data.is_staff) {
+        navigate('/admin-dashboard', { replace: true });
+        return;
+      }
+
       setUserData(response.data);
 
       if (!profileFormDirtyRef.current) {
@@ -120,6 +126,17 @@ function useStudentDashboardData({ activeTab, navigate, onUnauthorized }) {
       console.error(error);
     } finally {
       setLoadingVacancies(false);
+    }
+  };
+
+  const fetchStudentApplications = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/applications/`, {
+        headers: createAuthHeaders(),
+      });
+      setStudentApplications(response.data);
+    } catch (error) {
+      console.error('Gagal mengambil data lamaran', error);
     }
   };
 
@@ -162,7 +179,7 @@ function useStudentDashboardData({ activeTab, navigate, onUnauthorized }) {
     }
   };
 
-  const fetchCertificates = async () => {
+  const fetchCertificates = useCallback(async () => {
     setLoadingCertificates(true);
     try {
       const response = await axios.get(`${API_BASE_URL}/certificates/`, {
@@ -174,7 +191,7 @@ function useStudentDashboardData({ activeTab, navigate, onUnauthorized }) {
     } finally {
       setLoadingCertificates(false);
     }
-  };
+  }, []);
 
   const fetchTemplates = async () => {
     try {
@@ -275,7 +292,12 @@ function useStudentDashboardData({ activeTab, navigate, onUnauthorized }) {
   }, [fetchNotifications]);
 
   useEffect(() => {
-    if (activeTab === 'lowongan') fetchVacancies();
+    fetchCertificates();
+  }, [fetchCertificates]);
+
+  useEffect(() => {
+    if (activeTab === 'lowongan' || activeTab === 'lapor') fetchVacancies();
+    if (activeTab === 'lowongan' || activeTab === 'lapor') fetchStudentApplications();
     if (PLACEMENT_DATA_TABS.includes(activeTab)) fetchPlacementsAndEvaluations();
     if (activeTab === 'laporan_bulanan') fetchMonthlyReports();
     if (activeTab === 'sertifikat') fetchCertificates();
@@ -285,7 +307,7 @@ function useStudentDashboardData({ activeTab, navigate, onUnauthorized }) {
     }
     if (activeTab === 'lapor_mingguan') fetchWeeklyReports();
     if (activeTab === 'notifikasi') fetchNotifications();
-  }, [activeTab]);
+  }, [activeTab, fetchCertificates, fetchNotifications]);
 
   return {
     acceptanceLetter,
@@ -302,6 +324,7 @@ function useStudentDashboardData({ activeTab, navigate, onUnauthorized }) {
     fetchPlacementsAndEvaluations,
     fetchProfile,
     fetchSubmittedReports,
+    fetchStudentApplications,
     fetchWeeklyReports,
     isUpdatingProfile,
     loading,
@@ -353,6 +376,7 @@ function useStudentDashboardData({ activeTab, navigate, onUnauthorized }) {
     setWeeklyForm,
     setWeeklyReports,
     syncProfileForm,
+    studentApplications,
     submittedFinal,
     submittedUts,
     submittingApplication,

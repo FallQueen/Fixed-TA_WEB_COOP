@@ -17,6 +17,7 @@ export const EMPTY_VACANCY_FORM = {
   requirements: '',
   expires_at: '',
   external_apply_link: '',
+  notify_job_seekers: true,
 };
 
 export const EMPTY_TEMPLATE_FILES = {
@@ -29,11 +30,14 @@ export const EMPTY_CURRENT_TEMPLATES = {
   uas_template: null,
 };
 
+export const CERTIFICATE_GRADE_OPTIONS = ['A', 'AB', 'B', 'BC', 'D', 'E'];
+
 export const EMPTY_EMAIL_MODAL = {
   isOpen: false,
   actionType: '',
   targetId: null,
   targetName: '',
+  targetEmail: '',
   placementId: null,
   subject: '',
   message: '',
@@ -68,6 +72,7 @@ export const API_ROUTES = {
   changePassword: 'users/change-password/',
   sendReminders: 'send-reminders/',
   sendReportReminders: 'send-report-reminders/',
+  sendCompletionReminders: 'send-completion-reminders/',
 };
 
 export const SIDEBAR_SECTIONS = [

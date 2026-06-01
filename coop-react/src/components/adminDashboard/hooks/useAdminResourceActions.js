@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import api from '../../../api/axios';
-import { API_ROUTES } from '../constants';
+import { API_ROUTES, CERTIFICATE_GRADE_OPTIONS } from '../constants';
 import {
   buildEvaluationExportData,
   buildIndustryExportData,
@@ -9,6 +9,7 @@ import {
   getDefaultEmailContent,
   getFileName,
 } from '../helpers';
+import { getFeedbackApi } from './useAdminFeedback.js';
 
 export default function useAdminResourceActions({
   gradeInput,
@@ -29,37 +30,60 @@ export default function useAdminResourceActions({
   industries,
   placements,
   students,
+  feedback,
 }) {
+  const { notify, showAlert, showConfirm, showPrompt } = getFeedbackApi(feedback);
+
   const closeEmailModal = () => {
     setEmailModal((prev) => ({ ...prev, isOpen: false }));
   };
 
   const handleIssueCertificate = async (studentId, placementId) => {
-    const grade = gradeInput[placementId];
-    if (!grade) return alert('Isi Nilai Konversi (A, B+, dll) terlebih dahulu!');
-
-    const missing = getCertificateIssueMissingFields(placementId, monthlyReports, finalReports, evaluations);
-
-    if (missing.length > 0) {
-      const confirmMsg = `⚠️ MAHASISWA INI BELUM MEMENUHI SYARAT KELULUSAN!\n\nKekurangan berkas/nilai:\n${missing.join('\n')}\n\nApakah Anda yakin ingin TETAP MENERBITKAN sertifikat kelulusan?`;
-      if (!window.confirm(confirmMsg)) return;
-    } else if (!window.confirm('Semua berkas lengkap. Terbitkan sertifikat kelulusan sekarang?')) {
+    const grade = String(gradeInput[placementId] || '').trim().toUpperCase();
+    if (!CERTIFICATE_GRADE_OPTIONS.includes(grade)) {
+      notify({ type: 'warning', title: 'Grade Belum Dipilih', message: `Pilih Nilai Konversi ${CERTIFICATE_GRADE_OPTIONS.join(', ')} terlebih dahulu.` });
       return;
     }
 
+    const placement = placements.find((item) => String(item.id) === String(placementId));
+    const missing = getCertificateIssueMissingFields(placement, monthlyReports, utsReports, finalReports, evaluations, placements);
+
+    if (missing.length > 0) {
+      await showAlert({
+        type: 'warning',
+        title: 'Sertifikat Belum Bisa Diterbitkan',
+        message: 'Data kelulusan mahasiswa belum lengkap.',
+        details: missing,
+      });
+      return;
+    }
+
+    const confirmed = await showConfirm({
+      type: 'confirm',
+      title: 'Terbitkan Sertifikat?',
+      message: `Semua berkas sudah lengkap. Sertifikat akan diterbitkan dengan grade ${grade}.`,
+      confirmLabel: 'Terbitkan Sertifikat',
+    });
+    if (!confirmed) return;
+
     try {
       await api.post(API_ROUTES.certificates, { student: studentId, placement: placementId, grade });
-      alert('Sertifikat Berhasil Diterbitkan! 🎓');
+      notify({ type: 'success', title: 'Sertifikat Diterbitkan', message: `Sertifikat berhasil diterbitkan dengan grade ${grade}.` });
       setSelectedDetail(null);
       await fetchAdminData();
-    } catch {
-      alert('Gagal menerbitkan sertifikat.');
+    } catch (error) {
+      const responseData = error?.response?.data;
+      const errorMessage = responseData?.error
+        || responseData?.detail
+        || responseData?.non_field_errors?.join?.(' ')
+        || 'Sertifikat belum berhasil diterbitkan.';
+      notify({ type: 'danger', title: 'Gagal Menerbitkan Sertifikat', message: errorMessage });
     }
   };
 
-  const openEmailModal = (actionType, targetId = null, targetName = '', placementId = null) => {
+  const openEmailModal = (actionType, targetId = null, targetName = '', placementId = null, targetEmail = '') => {
     const { subject, message } = getDefaultEmailContent(actionType, targetName);
-    setEmailModal({ isOpen: true, actionType, targetId, targetName, placementId, subject, message });
+    setEmailModal({ isOpen: true, actionType, targetId, targetName, targetEmail, placementId, subject, message });
   };
 
   const handleSendCustomEmail = async (e) => {
@@ -69,14 +93,18 @@ export default function useAdminResourceActions({
     try {
       if (emailModal.actionType.includes('send_eval')) {
         const evalType = emailModal.actionType === 'send_eval_uts' ? 'UTS' : 'UAS';
-        await api.post(API_ROUTES.evaluations, {
+        const res = await api.post(API_ROUTES.evaluations, {
           placement: emailModal.placementId,
           eval_type: evalType,
           is_filled: false,
           subject: emailModal.subject,
           message: emailModal.message,
         });
-        alert(`Form Evaluasi ${evalType} berhasil dikirim! ✅`);
+        notify({
+          type: 'success',
+          title: `Form Evaluasi ${evalType} Dikirim`,
+          message: res.data?.message || 'Supervisor sudah mendapatkan permintaan evaluasi.',
+        });
         await fetchAdminData();
         closeEmailModal();
       } else {
@@ -89,11 +117,11 @@ export default function useAdminResourceActions({
         };
 
         const res = await api.post(endpoint, payload);
-        alert(res.data?.message || 'Email berhasil dikirim! ✅');
+        notify({ type: 'success', title: 'Email Berhasil Dikirim', message: res.data?.message || 'Pesan admin sudah dikirim.' });
         closeEmailModal();
       }
     } catch {
-      alert('Gagal mengirim email.');
+      notify({ type: 'danger', title: 'Gagal Mengirim Email', message: 'Pesan belum berhasil dikirim.' });
     } finally {
       setSendingEmail(false);
     }
@@ -120,7 +148,10 @@ export default function useAdminResourceActions({
 
   const handleTemplateSubmit = async (e, type) => {
     e.preventDefault();
-    if (!templateFiles[`${type}_template`]) return alert('Pilih file terlebih dahulu!');
+    if (!templateFiles[`${type}_template`]) {
+      notify({ type: 'warning', title: 'File Belum Dipilih', message: `Pilih file template ${type.toUpperCase()} terlebih dahulu.` });
+      return;
+    }
 
     setUploadingTemplate(type);
     const formData = new FormData();
@@ -130,11 +161,11 @@ export default function useAdminResourceActions({
       await api.post(API_ROUTES.templates, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       const res = await api.get(API_ROUTES.templates);
       setCurrentTemplates(res.data);
-      alert(`Template ${type.toUpperCase()} berhasil diupload! ✅`);
+      notify({ type: 'success', title: `Template ${type.toUpperCase()} Diperbarui`, message: 'Template laporan berhasil diunggah.' });
       setTemplateFiles({ ...templateFiles, [`${type}_template`]: null });
       e.target.reset();
     } catch {
-      alert(`Gagal mengupload template ${type.toUpperCase()}.`);
+      notify({ type: 'danger', title: `Gagal Upload Template ${type.toUpperCase()}`, message: 'Template laporan belum berhasil diunggah.' });
     } finally {
       setUploadingTemplate(null);
     }
@@ -146,16 +177,118 @@ export default function useAdminResourceActions({
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap_Evaluasi');
     XLSX.writeFile(workbook, 'Rekap_Evaluasi_Coop.xlsx');
+    notify({ type: 'success', title: 'Export Evaluasi Dimulai', message: 'File rekap evaluasi sedang diunduh.' });
+  };
+
+  const handleSendCompletionReminders = async (placementId = null) => {
+    const isSingleStudent = Boolean(placementId);
+    const confirmed = await showConfirm({
+      type: 'confirm',
+      title: isSingleStudent ? 'Kirim Reminder Kelengkapan?' : 'Kirim Reminder Massal?',
+      message: isSingleStudent
+        ? 'Sistem akan mengirim email dan notifikasi portal berisi daftar syarat kelulusan yang masih kurang.'
+        : 'Sistem akan mengirim email dan notifikasi portal kepada semua mahasiswa yang syarat kelulusannya masih belum lengkap.',
+      confirmLabel: 'Kirim Reminder',
+    });
+
+    if (!confirmed) return;
+
+    try {
+      const response = await api.post(
+        API_ROUTES.sendCompletionReminders,
+        placementId ? { placement_id: placementId } : {}
+      );
+      notify({
+        type: 'success',
+        title: 'Reminder Kelengkapan Diproses',
+        message: response.data?.message || 'Reminder kelengkapan berhasil diproses.',
+      });
+    } catch (error) {
+      const responseData = error?.response?.data;
+      notify({
+        type: 'danger',
+        title: 'Gagal Mengirim Reminder',
+        message: responseData?.error || responseData?.detail || 'Reminder kelengkapan belum berhasil dikirim.',
+      });
+    }
+  };
+
+  const handleApproveSupervisorChange = async (placement) => {
+    const confirmed = await showConfirm({
+      type: 'confirm',
+      title: 'Setujui Perubahan Supervisor?',
+      message: (
+        `Kontak supervisor akan diperbarui menjadi ${placement.pending_supervisor_name} `
+        + `(${placement.pending_supervisor_email}). Link evaluasi yang masih menunggu akan dikirim ulang ke email baru.`
+      ),
+      confirmLabel: 'Setujui Perubahan',
+    });
+
+    if (!confirmed) return;
+
+    try {
+      const response = await api.post(`${API_ROUTES.placements}${placement.id}/approve-supervisor-change/`);
+      notify({
+        type: 'success',
+        title: 'Kontak Supervisor Diperbarui',
+        message: response.data?.message || 'Kontak supervisor baru sudah aktif.',
+      });
+      await fetchAdminData();
+    } catch (error) {
+      notify({
+        type: 'danger',
+        title: 'Perubahan Belum Disetujui',
+        message: error?.response?.data?.detail || 'Kontak supervisor belum berhasil diperbarui.',
+      });
+    }
+  };
+
+  const handleRejectSupervisorChange = async (placement) => {
+    const reason = await showPrompt({
+      type: 'prompt',
+      title: 'Tolak Perubahan Supervisor?',
+      message: `Tuliskan alasan agar mahasiswa dapat memperbaiki data kontak supervisor untuk ${placement.company_name}.`,
+      inputLabel: 'Alasan penolakan',
+      placeholder: 'Contoh: Gunakan email kantor supervisor yang aktif.',
+      multiline: true,
+      confirmLabel: 'Tolak Pengajuan',
+      validate: (value) => (value.trim() ? '' : 'Alasan penolakan wajib diisi.'),
+    });
+
+    if (reason === null) return;
+
+    try {
+      const response = await api.post(
+        `${API_ROUTES.placements}${placement.id}/reject-supervisor-change/`,
+        { reason: reason.trim() }
+      );
+      notify({
+        type: 'success',
+        title: 'Pengajuan Perlu Diperbaiki',
+        message: response.data?.message || 'Alasan penolakan sudah dikirim ke mahasiswa.',
+      });
+      await fetchAdminData();
+    } catch (error) {
+      notify({
+        type: 'danger',
+        title: 'Pengajuan Belum Ditolak',
+        message: error?.response?.data?.detail || 'Status pengajuan belum berhasil diperbarui.',
+      });
+    }
   };
 
   const handleExportIndustries = () => {
-    if (industries.length === 0) return alert('Data Mitra Industri masih kosong!');
+    if (industries.length === 0) {
+      notify({ type: 'warning', title: 'Data Mitra Kosong', message: 'Data Mitra Industri masih kosong.' });
+      return;
+    }
 
     const dataToExport = buildIndustryExportData(industries);
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Mitra_Industri');
     XLSX.writeFile(workbook, 'Data_Mitra_Industri_Coop.xlsx');
+    notify({ type: 'success', title: 'Export Industri Dimulai', message: 'File data mitra industri sedang diunduh.' });
   };
 
   return {
@@ -168,6 +301,9 @@ export default function useAdminResourceActions({
     handleTemplateSubmit,
     getFileName,
     handleExportEvaluations,
+    handleSendCompletionReminders,
+    handleApproveSupervisorChange,
+    handleRejectSupervisorChange,
     handleExportIndustries,
   };
 }

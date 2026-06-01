@@ -67,8 +67,8 @@ function DashboardShell({
   const prodiDropdownStyle = {
     position: 'absolute',
     top: '52px',
-    left: isMobile ? '0' : 'auto',
-    right: isMobile ? 'auto' : '0',
+    left: 'auto',
+    right: '0',
     zIndex: 100,
     width: isMobile ? 'min(82vw, 320px)' : '320px',
     maxHeight: '330px',
@@ -81,8 +81,8 @@ function DashboardShell({
   };
 
   const renderSearchTools = (maxWidth = '520px') => (
-    <div style={{ display: 'flex', alignItems: isMobile ? 'stretch' : 'center', flexDirection: isMobile ? 'column' : 'row', gap: '10px', width: '100%', maxWidth }}>
-      <div style={styles.searchContainer}>
+    <div style={{ display: 'flex', alignItems: 'center', flexDirection: 'row', gap: isMobile ? '8px' : '10px', width: '100%', maxWidth, minWidth: 0 }}>
+      <div style={{ ...styles.searchContainer, minWidth: 0 }}>
         <Search size={16} color="#94a3b8" />
         <input
           type="text"
@@ -328,15 +328,15 @@ function DashboardShell({
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '15px',
+                gap: '10px',
                 position: 'sticky',
-                top: '-18px',
+                top: '-12px',
                 zIndex: 50,
                 backgroundColor: 'rgba(243, 246, 251, 0.92)',
                 backdropFilter: 'blur(10px)',
-                paddingTop: '18px',
-                paddingBottom: '16px',
-                marginBottom: '12px',
+                paddingTop: '12px',
+                paddingBottom: '12px',
+                marginBottom: '10px',
                 borderBottom: '1px solid rgba(226, 232, 240, 0.5)',
               }}
             >

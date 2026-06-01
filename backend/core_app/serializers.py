@@ -1,9 +1,29 @@
 # WAJIB ADA: Ini yang tadi bikin error karena hilang
+from datetime import timedelta
+
 from rest_framework import serializers 
+from django.utils import timezone
 
 # Import semua model (tabel) kita
 from .models import Certificate, DocumentTemplate, FinalReport, MonthlyReport, Notification, SupervisorEvaluation, User, UtsReport, Vacancy, Application, Placement, WeeklyHuntReport
 from django.contrib.auth.password_validation import validate_password
+
+MIN_INTERNSHIP_WORKING_DAYS = 90
+
+
+def count_working_days(start_date, end_date):
+    if not start_date or not end_date or end_date < start_date:
+        return 0
+
+    working_days = 0
+    current_date = start_date
+
+    while current_date <= end_date:
+        if current_date.weekday() < 5:
+            working_days += 1
+        current_date += timedelta(days=1)
+
+    return working_days
 
 # ==========================================
 # 1. SERIALIZER PROFIL MAHASISWA
@@ -15,13 +35,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'first_name', 'last_name', 
             'nim', 'program_studi', 'angkatan', 'gender', 'phone_number', 
             'cv_file', 'portofolio_file', 'bukti_konsul_file', 'sptjm_file',
-            'is_staff', 'is_active', 'password'
+            'is_staff', 'is_active', 'date_joined', 'password',
+            'registration_status', 'registration_rejection_reason'
         ]
         
         # HAPUS 'username' DARI SINI 👇
         read_only_fields = [
             'email', 'nim', 'program_studi', 'angkatan', 
-            'bukti_konsul_file', 'sptjm_file', 'is_staff'
+            'bukti_konsul_file', 'sptjm_file', 'is_staff', 'date_joined',
+            'registration_status', 'registration_rejection_reason'
         ]
         
         extra_kwargs = {
@@ -38,6 +60,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
 # 2. SERIALIZERS FITUR LOWONGAN & LAMARAN
 # ==========================================
 class VacancySerializer(serializers.ModelSerializer):
+    def validate_expires_at(self, value):
+        if value and value < timezone.localdate():
+            raise serializers.ValidationError("Tanggal expired lowongan tidak boleh sebelum hari ini.")
+        return value
+
     class Meta:
         model = Vacancy
         fields = '__all__'
@@ -56,11 +83,80 @@ class PlacementSerializer(serializers.ModelSerializer):
         model = Placement
         fields = '__all__'
         # [UPDATE] Kunci field ini biar nggak bisa dimanipulasi dari sisi client
-        read_only_fields = ['student', 'status', 'is_approved', 'created_at']
+        read_only_fields = [
+            'student',
+            'status',
+            'is_approved',
+            'created_at',
+            'pending_supervisor_name',
+            'pending_supervisor_email',
+            'pending_supervisor_phone',
+            'supervisor_change_reason',
+            'supervisor_change_status',
+            'supervisor_change_rejection_reason',
+            'supervisor_change_requested_at',
+        ]
+
+    def has_active_transfer_source(self):
+        request = self.context.get('request')
+        student = getattr(self.instance, 'student', None)
+
+        if not student and request:
+            student = request.user
+            if request.user.is_staff and self.initial_data.get('student'):
+                student = User.objects.filter(id=self.initial_data.get('student')).first()
+
+        if not student:
+            return False
+
+        active_placements = Placement.objects.filter(
+            student=student,
+            status='verified',
+            is_approved=True,
+        )
+
+        if self.instance:
+            active_placements = active_placements.exclude(id=self.instance.id)
+
+        return active_placements.exists()
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        start_date = attrs.get('start_date', getattr(self.instance, 'start_date', None))
+        end_date = attrs.get('end_date', getattr(self.instance, 'end_date', None))
+        previous_placement_end_date = attrs.get(
+            'previous_placement_end_date',
+            getattr(self.instance, 'previous_placement_end_date', None)
+        )
+        working_days = count_working_days(start_date, end_date)
+        is_transfer_duration = previous_placement_end_date and self.has_active_transfer_source()
+
+        if (
+            start_date
+            and end_date
+            and not is_transfer_duration
+            and working_days < MIN_INTERNSHIP_WORKING_DAYS
+        ):
+            raise serializers.ValidationError({
+                'error': (
+                    f'Durasi magang minimal {MIN_INTERNSHIP_WORKING_DAYS} hari kerja '
+                    f'(Senin-Jumat). Durasi yang dipilih saat ini {working_days} hari kerja.'
+                )
+            })
+
+        return attrs
 
 # ==========================================
 # 4. SERIALIZER LAPORAN BULANAN
 # ==========================================
+FIRST_MONTH_REPORT_REQUIRED_FIELDS = {
+    'company_profile': 'Profil Perusahaan',
+    'work_environment': 'Suasana Lingkungan & Budaya Kerja',
+    'useful_courses': 'Materi Kuliah yang Berguna',
+    'new_skills': 'Skill Baru yang Dipelajari',
+}
+
+
 class MonthlyReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = MonthlyReport
@@ -76,6 +172,36 @@ class MonthlyReportSerializer(serializers.ModelSerializer):
             'useful_courses': {'required': False, 'allow_blank': True, 'allow_null': True},
             'new_skills': {'required': False, 'allow_blank': True, 'allow_null': True},
         }
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        request = self.context.get('request')
+        student = getattr(self.instance, 'student', None) or getattr(request, 'user', None)
+        placement = attrs.get('placement') or getattr(self.instance, 'placement', None)
+
+        if not student or not getattr(student, 'is_authenticated', False) or not placement:
+            return attrs
+
+        existing_reports = MonthlyReport.objects.filter(student=student, placement=placement)
+        if self.instance:
+            existing_reports = existing_reports.exclude(id=self.instance.id)
+
+        if existing_reports.exists():
+            return attrs
+
+        missing_fields = []
+        for field_name, label in FIRST_MONTH_REPORT_REQUIRED_FIELDS.items():
+            value = attrs.get(field_name, getattr(self.instance, field_name, ''))
+            if value is None or str(value).strip() == '':
+                missing_fields.append(label)
+
+        if missing_fields:
+            missing_text = ', '.join(missing_fields)
+            raise serializers.ValidationError({
+                'error': f'Laporan pertama untuk tempat magang ini wajib melengkapi {missing_text}.'
+            })
+
+        return attrs
 
 # ==========================================
 # 5. SERIALIZER LAPORAN AKHIR 

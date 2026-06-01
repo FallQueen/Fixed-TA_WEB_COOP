@@ -1,11 +1,15 @@
+import { useState } from 'react';
 import {
   ArrowLeft,
   Award,
   BarChart2,
+  Bell,
   Briefcase,
   Building2,
   Calendar,
+  CheckCheck,
   CheckCircle,
+  ChevronRight,
   Clock,
   Download,
   Edit,
@@ -20,9 +24,12 @@ import {
   Key,
   Loader2,
   Lock,
+  Mail,
   Map,
   MapPin,
+  Phone,
   Printer,
+  RefreshCw,
   Save,
   Send,
   ShieldAlert,
@@ -30,8 +37,17 @@ import {
   Trash2,
   UploadCloud,
   User,
+  UserRound,
   XCircle,
 } from 'lucide-react';
+import {
+  MIN_INTERNSHIP_WORKING_DAYS,
+  calculateWorkingDays,
+  getNextDateValue,
+  getPlacementId,
+  getMinimumInternshipEndDate,
+} from '../constants';
+import { getFeedbackApi } from '../adminDashboard/hooks/useAdminFeedback';
 
 const getPlacementStatusMeta = (status) => {
   switch (status) {
@@ -48,6 +64,35 @@ const getPlacementStatusMeta = (status) => {
   }
 };
 
+const ACTIVE_INTERNAL_APPLICATION_STATUSES = ['pending', 'reviewed', 'accepted'];
+const WITHDRAWABLE_APPLICATION_STATUSES = ['pending', 'reviewed'];
+
+const getApplicationStatusLabel = (status) => {
+  switch (status) {
+    case 'pending':
+      return 'Menunggu Review Admin';
+    case 'reviewed':
+      return 'Sudah Diteruskan ke Perusahaan';
+    case 'accepted':
+      return 'Diterima Perusahaan';
+    case 'withdrawn':
+      return 'Ditarik Mahasiswa';
+    case 'rejected':
+      return 'Ditolak Perusahaan';
+    default:
+      return status || '-';
+  }
+};
+
+const getApplicationStatusStyle = (status) => {
+  if (status === 'pending') return { backgroundColor: '#fff7ed', color: '#9a3412' };
+  if (status === 'reviewed') return { backgroundColor: '#e0f2fe', color: '#075985' };
+  if (status === 'accepted') return { backgroundColor: '#dcfce7', color: '#166534' };
+  if (status === 'withdrawn') return { backgroundColor: '#f1f5f9', color: '#475569' };
+  if (status === 'rejected') return { backgroundColor: '#fee2e2', color: '#991b1b' };
+  return { backgroundColor: '#f1f5f9', color: '#475569' };
+};
+
 const formatNotificationTime = (value) =>
   new Date(value).toLocaleString('id-ID', {
     day: '2-digit',
@@ -56,6 +101,55 @@ const formatNotificationTime = (value) =>
     hour: '2-digit',
     minute: '2-digit',
   });
+
+const getNotificationMeta = (notificationType) => {
+  switch (notificationType) {
+    case 'certificate':
+      return { icon: Award, label: 'Sertifikat', color: '#047857', tint: '#ecfdf5', border: '#a7f3d0' };
+    case 'reminder':
+      return { icon: Clock, label: 'Pengingat', color: '#b45309', tint: '#fffbeb', border: '#fde68a' };
+    case 'application':
+      return { icon: Briefcase, label: 'Lamaran', color: '#0369a1', tint: '#f0f9ff', border: '#bae6fd' };
+    case 'vacancy':
+      return { icon: Building2, label: 'Lowongan', color: '#4338ca', tint: '#eef2ff', border: '#c7d2fe' };
+    case 'account':
+      return { icon: UserRound, label: 'Akun', color: '#7c3aed', tint: '#f5f3ff', border: '#ddd6fe' };
+    default:
+      return { icon: Bell, label: 'Informasi', color: '#1d4ed8', tint: '#eff6ff', border: '#bfdbfe' };
+  }
+};
+
+const getNotificationTargetLabel = (targetTab) => ({
+  profil: 'Buka Profil',
+  lowongan: 'Buka Bursa',
+  lapor: 'Buka Data Magang',
+  lapor_mingguan: 'Buka Progress',
+  laporan_bulanan: 'Buka Laporan Bulanan',
+  laporan_uts: 'Buka Laporan UTS',
+  laporan_akhir: 'Buka Laporan Akhir',
+  sertifikat: 'Buka Sertifikat',
+}[targetTab] || 'Buka Detail');
+
+const OUTLOOK_WEB_URL = 'https://outlook.office.com/mail/';
+
+const getNotificationExternalAction = (notification) => {
+  if (notification.action_url) {
+    return {
+      label: notification.action_label || 'Buka Tautan',
+      url: notification.action_url,
+    };
+  }
+
+  const normalizedMessage = String(notification.message || '').toLowerCase();
+  if (normalizedMessage.includes('buka email tersebut') || normalizedMessage.includes('cek email kampus')) {
+    return {
+      label: 'Buka Email Kampus',
+      url: OUTLOOK_WEB_URL,
+    };
+  }
+
+  return null;
+};
 
 export function ProfileTab({
   files,
@@ -277,41 +371,79 @@ export function NotificationsTab({
   notifications,
   styles,
 }) {
+  const [activeFilter, setActiveFilter] = useState('all');
   const unreadCount = notifications.filter((notification) => !notification.is_read).length;
+  const readCount = notifications.length - unreadCount;
+  const visibleNotifications = notifications.filter((notification) => {
+    if (activeFilter === 'unread') return !notification.is_read;
+    if (activeFilter === 'read') return notification.is_read;
+    return true;
+  });
+  const filters = [
+    { id: 'all', label: 'Semua', count: notifications.length },
+    { id: 'unread', label: 'Belum Dibaca', count: unreadCount },
+    { id: 'read', label: 'Sudah Dibaca', count: readCount },
+  ];
 
   return (
     <div className="no-print">
       <div style={styles.heroBanner}>
         <h1 style={styles.heroTitle}>Pusat Notifikasi</h1>
-        <p style={styles.heroSubtitle}>Semua update penting dari admin, sertifikat, dan hasil proses lamaran akan muncul di sini.</p>
+        <p style={styles.heroSubtitle}>Pantau kabar terbaru dari Admin Unit Co-op dalam satu tempat.</p>
       </div>
 
-      <div style={{ ...styles.card, marginBottom: '25px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', gap: '15px' }}>
-        <div>
-          <h3 style={{ margin: '0 0 6px 0', color: '#003366' }}>Ringkasan Notifikasi</h3>
-          <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
-            {unreadCount > 0 ? `Kamu punya ${unreadCount} notifikasi yang belum dibaca.` : 'Semua notifikasi sudah terbaca.'}
-          </p>
+      <div style={{ ...styles.card, marginBottom: '20px', padding: isMobile ? '18px' : '22px 24px' }}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: '18px' }}>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ minWidth: '120px', paddingRight: '18px', borderRight: '1px solid #e2e8f0' }}>
+              <div style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '800', textTransform: 'uppercase' }}>Total Pesan</div>
+              <strong style={{ display: 'block', marginTop: '6px', color: '#0f172a', fontSize: '26px', lineHeight: 1 }}>{notifications.length}</strong>
+            </div>
+            <div style={{ minWidth: '130px' }}>
+              <div style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '800', textTransform: 'uppercase' }}>Perlu Dibaca</div>
+              <strong style={{ display: 'block', marginTop: '6px', color: unreadCount > 0 ? '#b45309' : '#047857', fontSize: '26px', lineHeight: 1 }}>{unreadCount}</strong>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', width: isMobile ? '100%' : 'auto' }}>
+            <button
+              type="button"
+              title="Tandai semua notifikasi sebagai dibaca"
+              aria-label="Tandai semua notifikasi sebagai dibaca"
+              onClick={handleMarkAllNotificationsRead}
+              disabled={notifications.length === 0 || unreadCount === 0}
+              className="btn-hover"
+              style={{ ...styles.btnPrimary, backgroundColor: unreadCount === 0 ? '#e2e8f0' : '#003366', color: unreadCount === 0 ? '#94a3b8' : '#ffffff', width: isMobile ? '100%' : 'auto', cursor: unreadCount === 0 ? 'not-allowed' : 'pointer' }}
+            >
+              <CheckCheck size={16} /> Tandai Semua Dibaca
+            </button>
+            <button
+              type="button"
+              title="Hapus semua notifikasi"
+              aria-label="Hapus semua notifikasi"
+              onClick={handleDeleteAllNotifications}
+              disabled={notifications.length === 0}
+              className="btn-hover"
+              style={{ width: '44px', minWidth: '44px', height: '42px', borderRadius: '8px', border: '1px solid #fecaca', backgroundColor: notifications.length === 0 ? '#f8fafc' : '#fff1f2', color: notifications.length === 0 ? '#cbd5e1' : '#dc2626', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: notifications.length === 0 ? 'not-allowed' : 'pointer' }}
+            >
+              <Trash2 size={17} />
+            </button>
+          </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '10px', width: isMobile ? '100%' : 'auto' }}>
-          <button
-            type="button"
-            onClick={handleMarkAllNotificationsRead}
-            disabled={notifications.length === 0 || unreadCount === 0}
-            className="btn-hover"
-            style={{ ...styles.btnPrimary, backgroundColor: unreadCount === 0 ? '#94a3b8' : '#003366', width: isMobile ? '100%' : 'auto' }}
-          >
-            <CheckCircle size={16} /> Tandai Semua Dibaca
-          </button>
-          <button
-            type="button"
-            onClick={handleDeleteAllNotifications}
-            disabled={notifications.length === 0}
-            className="btn-hover"
-            style={{ ...styles.btnPrimary, backgroundColor: notifications.length === 0 ? '#cbd5e1' : '#991b1b', width: isMobile ? '100%' : 'auto' }}
-          >
-            <Trash2 size={16} /> Hapus Semua
-          </button>
+        <div style={{ display: 'flex', gap: '6px', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f1f5f9', overflowX: 'auto' }}>
+          {filters.map((filter) => {
+            const isActive = activeFilter === filter.id;
+
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => setActiveFilter(filter.id)}
+                style={{ border: `1px solid ${isActive ? '#bfdbfe' : '#e2e8f0'}`, borderRadius: '999px', padding: '8px 11px', backgroundColor: isActive ? '#eff6ff' : '#ffffff', color: isActive ? '#003366' : '#64748b', fontSize: '11px', lineHeight: 1, fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}
+              >
+                {filter.label} <span style={{ marginLeft: '4px', opacity: 0.7 }}>{filter.count}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -325,75 +457,151 @@ export function NotificationsTab({
           <h3 style={{ margin: '10px 0', color: '#003366' }}>Belum Ada Notifikasi</h3>
           <p>Tidak ada update baru untuk akunmu saat ini.</p>
         </div>
+      ) : visibleNotifications.length === 0 ? (
+        <div style={{ ...styles.card, textAlign: 'center', color: '#64748b', border: '1px dashed #cbd5e1' }}>
+          <Bell size={38} color="#cbd5e1" style={{ marginBottom: '8px' }} />
+          <h3 style={{ margin: '8px 0', color: '#003366', fontSize: '16px' }}>Tidak Ada Pesan pada Filter Ini</h3>
+          <p style={{ margin: 0, fontSize: '13px' }}>Pilih filter lain untuk melihat notifikasi yang tersedia.</p>
+        </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          {notifications.map((notification) => (
-            <div
-              key={notification.id}
-              style={{
-                ...styles.card,
-                borderLeft: notification.is_read ? '6px solid #cbd5e1' : '6px solid #F2A900',
-                backgroundColor: notification.is_read ? 'white' : '#fffdf5',
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', gap: '12px', alignItems: isMobile ? 'flex-start' : 'flex-start' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                    <strong style={{ color: '#0f172a', fontSize: '16px' }}>{notification.title}</strong>
-                    {!notification.is_read && (
-                      <span style={{ ...styles.newBadge, backgroundColor: '#dc2626' }}>
-                        Baru
-                      </span>
-                    )}
-                  </div>
-                  <p style={{ margin: '0 0 12px 0', color: '#475569', lineHeight: '1.7', fontSize: '14px', whiteSpace: 'pre-line' }}>
-                    {notification.message}
-                  </p>
-                  <p style={{ margin: 0, color: '#94a3b8', fontSize: '12px' }}>
-                    {formatNotificationTime(notification.created_at)}
-                  </p>
-                </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {visibleNotifications.map((notification) => {
+            const notificationMeta = getNotificationMeta(notification.notification_type);
+            const NotificationIcon = notificationMeta.icon;
+            const externalAction = getNotificationExternalAction(notification);
 
-                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'column', gap: '10px', width: isMobile ? '100%' : 'auto' }}>
-                  {notification.target_tab && (
+            return (
+              <div
+                key={notification.id}
+                style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '14px', padding: isMobile ? '16px' : '17px 18px', borderRadius: '10px', border: `1px solid ${notification.is_read ? '#e2e8f0' : notificationMeta.border}`, backgroundColor: notification.is_read ? '#ffffff' : '#fffefa', boxShadow: notification.is_read ? 'none' : '0 8px 18px rgba(15, 23, 42, 0.04)' }}
+              >
+                <div style={{ display: 'flex', gap: '13px', flex: 1, minWidth: 0 }}>
+                  <div style={{ width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: notificationMeta.color, backgroundColor: notificationMeta.tint, border: `1px solid ${notificationMeta.border}` }}>
+                    <NotificationIcon size={18} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
+                      <span style={{ color: notificationMeta.color, fontSize: '10px', fontWeight: '800', textTransform: 'uppercase' }}>{notificationMeta.label}</span>
+                      {!notification.is_read && <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#f59e0b' }} />}
+                    </div>
+                    <strong style={{ display: 'block', marginTop: '5px', color: '#0f172a', fontSize: '14px', lineHeight: 1.45 }}>{notification.title}</strong>
+                    <p style={{ margin: '5px 0 0', color: '#64748b', lineHeight: 1.65, fontSize: '13px', whiteSpace: 'pre-line' }}>{notification.message}</p>
+                    <p style={{ margin: '9px 0 0', color: '#94a3b8', fontSize: '11px', fontWeight: '600' }}>{formatNotificationTime(notification.created_at)}</p>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: isMobile ? 'stretch' : 'center', justifyContent: isMobile ? 'flex-end' : 'center', gap: '7px', paddingLeft: isMobile ? '51px' : '0' }}>
+                  {externalAction ? (
+                    <a
+                      href={externalAction.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        if (!notification.is_read) handleMarkNotificationRead(notification.id);
+                      }}
+                      className="btn-hover"
+                      style={{ ...styles.btnPrimary, padding: '10px 12px', backgroundColor: '#003366', width: isMobile ? '100%' : 'auto', fontSize: '12px', whiteSpace: 'nowrap', textDecoration: 'none' }}
+                    >
+                      {externalAction.label} <ExternalLink size={14} />
+                    </a>
+                  ) : notification.target_tab && (
                     <button
                       type="button"
                       onClick={() => handleOpenNotification(notification)}
                       className="btn-hover"
-                      style={{ ...styles.btnPrimary, backgroundColor: '#003366', width: isMobile ? '100%' : 'auto' }}
+                      style={{ ...styles.btnPrimary, padding: '10px 12px', backgroundColor: '#003366', width: isMobile ? '100%' : 'auto', fontSize: '12px', whiteSpace: 'nowrap' }}
                     >
-                      <Eye size={16} /> Buka Terkait
+                      {getNotificationTargetLabel(notification.target_tab)} <ChevronRight size={15} />
                     </button>
                   )}
                   {!notification.is_read && (
                     <button
                       type="button"
+                      title="Tandai sebagai dibaca"
+                      aria-label="Tandai sebagai dibaca"
                       onClick={() => handleMarkNotificationRead(notification.id)}
                       className="btn-hover"
-                      style={{ ...styles.btnPrimary, backgroundColor: '#fff', color: '#003366', border: '1px solid #cbd5e1', width: isMobile ? '100%' : 'auto' }}
+                      style={{ width: '38px', height: '38px', borderRadius: '8px', border: '1px solid #bfdbfe', backgroundColor: '#eff6ff', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
                     >
-                      <CheckCircle size={16} /> Tandai Dibaca
+                      <CheckCircle size={16} />
                     </button>
                   )}
                   <button
                     type="button"
+                    title="Hapus notifikasi"
+                    aria-label="Hapus notifikasi"
                     onClick={() => handleDeleteNotification(notification.id)}
                     className="btn-hover"
-                    style={{ ...styles.btnPrimary, backgroundColor: '#fff', color: '#991b1b', border: '1px solid #fecaca', width: isMobile ? '100%' : 'auto' }}
+                    style={{ width: '38px', height: '38px', borderRadius: '8px', border: '1px solid #fecaca', backgroundColor: '#fff1f2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
                   >
-                    <Trash2 size={16} /> Hapus
+                    <Trash2 size={16} />
                   </button>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-export function VacanciesTab({ hasAnyPlacement, loadingVacancies, setSelectedVacancy, styles, vacancies }) {
+export function VacanciesTab({
+  handleWithdrawApplication,
+  hasAnyPlacement,
+  loadingVacancies,
+  setSelectedVacancy,
+  studentApplications = [],
+  styles,
+  vacancies,
+}) {
+  const [withdrawModal, setWithdrawModal] = useState({
+    application: null,
+    reason: '',
+    error: '',
+    submitting: false,
+  });
+  const [withdrawFeedback, setWithdrawFeedback] = useState(null);
+  const visibleApplications = studentApplications.filter((application) => !application.is_archived_by_admin);
+  const getVacancyForApplication = (application) => {
+    if (application.vacancy?.id) return application.vacancy;
+    return vacancies.find((vacancy) => String(vacancy.id) === String(application.vacancy));
+  };
+  const selectedWithdrawalVacancy = withdrawModal.application
+    ? getVacancyForApplication(withdrawModal.application)
+    : null;
+  const closeWithdrawModal = () => {
+    if (withdrawModal.submitting) return;
+    setWithdrawModal({ application: null, reason: '', error: '', submitting: false });
+  };
+  const openWithdrawModal = (application) => {
+    setWithdrawFeedback(null);
+    setWithdrawModal({ application, reason: '', error: '', submitting: false });
+  };
+  const submitWithdrawApplication = async (event) => {
+    event.preventDefault();
+
+    const withdrawalReason = withdrawModal.reason.trim();
+    if (!withdrawalReason) {
+      setWithdrawModal((current) => ({ ...current, error: 'Alasan menarik lamaran wajib diisi.' }));
+      return;
+    }
+
+    setWithdrawModal((current) => ({ ...current, error: '', submitting: true }));
+    const result = await handleWithdrawApplication(withdrawModal.application, withdrawalReason);
+
+    if (result?.ok) {
+      setWithdrawModal({ application: null, reason: '', error: '', submitting: false });
+      setWithdrawFeedback({ type: 'success', message: result.message });
+      return;
+    }
+
+    setWithdrawModal((current) => ({
+      ...current,
+      error: result?.message || 'Gagal menarik lamaran. Silakan coba lagi.',
+      submitting: false,
+    }));
+  };
+
   return (
     <div className="no-print">
       <div style={styles.heroBanner}>
@@ -406,6 +614,58 @@ export function VacanciesTab({ hasAnyPlacement, loadingVacancies, setSelectedVac
           <div>
             <h4 style={{ margin: '0 0 4px 0', color: '#991b1b' }}>Akses Dilindungi (Anti-Double Magang)</h4>
             <p style={{ margin: 0, color: '#991b1b', fontSize: '13px' }}>Anda sudah terdaftar di suatu tempat magang aktif. Tombol lamar untuk lowongan baru telah dikunci oleh sistem.</p>
+          </div>
+        </div>
+      )}
+      {visibleApplications.length > 0 && (
+        <div style={{ ...styles.card, marginBottom: '24px' }}>
+          <h3 style={{ margin: '0 0 14px 0', color: '#003366', fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Briefcase size={18} /> Lamaran Internal Saya
+          </h3>
+          {withdrawFeedback && (
+            <div style={{ marginBottom: '14px', padding: '12px 14px', borderRadius: '10px', border: `1px solid ${withdrawFeedback.type === 'success' ? '#bbf7d0' : '#fecaca'}`, backgroundColor: withdrawFeedback.type === 'success' ? '#f0fdf4' : '#fef2f2', color: withdrawFeedback.type === 'success' ? '#166534' : '#991b1b', fontSize: '13px', fontWeight: '700', lineHeight: '1.5' }}>
+              {withdrawFeedback.message}
+            </div>
+          )}
+          <div style={{ display: 'grid', gap: '12px' }}>
+            {visibleApplications.map((application) => {
+              const vacancy = getVacancyForApplication(application);
+              const statusStyle = getApplicationStatusStyle(application.status);
+              const canWithdraw = WITHDRAWABLE_APPLICATION_STATUSES.includes(application.status);
+
+              return (
+                <div key={application.id} style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '14px', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                    <div>
+                      <h4 style={{ margin: '0 0 4px 0', color: '#0f172a', fontSize: '14px', fontWeight: '800' }}>
+                        {vacancy?.title || 'Lowongan tidak ditemukan'}
+                      </h4>
+                      <p style={{ margin: 0, color: '#64748b', fontSize: '12px', fontWeight: '700' }}>
+                        {vacancy?.company_name || '-'} - Apply {new Date(application.applied_at).toLocaleDateString('id-ID')}
+                      </p>
+                    </div>
+                    <span style={{ ...statusStyle, display: 'inline-flex', alignItems: 'center', borderRadius: '999px', padding: '6px 10px', fontSize: '11px', fontWeight: '800' }}>
+                      {getApplicationStatusLabel(application.status)}
+                    </span>
+                  </div>
+                  {application.status === 'withdrawn' && application.withdrawal_reason && (
+                    <p style={{ margin: 0, color: '#64748b', fontSize: '12px', lineHeight: '1.6' }}>
+                      Alasan ditarik: {application.withdrawal_reason}
+                    </p>
+                  )}
+                  {canWithdraw && (
+                    <button
+                      type="button"
+                      className="btn-hover"
+                      onClick={() => openWithdrawModal(application)}
+                      style={{ ...styles.btnPrimary, backgroundColor: '#fff', color: '#991b1b', border: '1px solid #fecaca', width: 'fit-content' }}
+                    >
+                      <XCircle size={16} /> Tarik Lamaran
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -447,6 +707,65 @@ export function VacanciesTab({ hasAnyPlacement, loadingVacancies, setSelectedVac
           ))}
         </div>
       )}
+      {withdrawModal.application && (
+        <div style={styles.modalOverlay}>
+          <div style={{ ...styles.modalContent, maxWidth: '560px' }}>
+            <div style={styles.modalHeader}>
+              <div>
+                <h3 style={{ margin: 0, color: '#003366', fontSize: '18px', fontWeight: '800' }}>Tarik Lamaran Internal</h3>
+                <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '12px', fontWeight: '600' }}>
+                  {selectedWithdrawalVacancy?.title || 'Lowongan internal'} - {selectedWithdrawalVacancy?.company_name || 'Perusahaan mitra'}
+                </p>
+              </div>
+              <button type="button" onClick={closeWithdrawModal} style={styles.closeBtn} disabled={withdrawModal.submitting}>
+                <XCircle size={24} />
+              </button>
+            </div>
+            <form onSubmit={submitWithdrawApplication}>
+              <div style={{ padding: '24px', backgroundColor: '#f8fafc' }}>
+                <div style={{ padding: '14px', borderRadius: '10px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', fontSize: '13px', lineHeight: '1.6', fontWeight: '700', marginBottom: '16px' }}>
+                  Setelah ditarik, lamaran ini tidak lagi diproses admin/HRD. Tulis alasan yang jelas supaya admin punya catatan prosesnya.
+                </div>
+                <label style={{ ...styles.labelStyle, color: '#003366' }}>Alasan Penarikan Lamaran</label>
+                <textarea
+                  autoFocus
+                  rows="5"
+                  value={withdrawModal.reason}
+                  onChange={(event) => setWithdrawModal((current) => ({ ...current, reason: event.target.value, error: '' }))}
+                  placeholder="Contoh: Saya sudah diterima magang di perusahaan luar bursa Co-op."
+                  className="input-focus"
+                  style={{ ...styles.inputStyle, backgroundColor: '#fff', resize: 'vertical' }}
+                  disabled={withdrawModal.submitting}
+                />
+                {withdrawModal.error && (
+                  <div style={{ marginTop: '12px', padding: '12px', borderRadius: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', fontSize: '13px', fontWeight: '700' }}>
+                    {withdrawModal.error}
+                  </div>
+                )}
+              </div>
+              <div style={{ padding: '18px 24px', display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap', backgroundColor: 'white', borderTop: '1px solid #e2e8f0' }}>
+                <button
+                  type="button"
+                  className="btn-hover"
+                  onClick={closeWithdrawModal}
+                  disabled={withdrawModal.submitting}
+                  style={{ ...styles.btnPrimary, backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' }}
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="btn-hover"
+                  disabled={withdrawModal.submitting}
+                  style={{ ...styles.btnPrimary, backgroundColor: withdrawModal.submitting ? '#94a3b8' : '#991b1b', color: '#fff' }}
+                >
+                  {withdrawModal.submitting ? <><Loader2 size={16} className="animate-spin" /> Memproses...</> : <><XCircle size={16} /> Tarik Lamaran</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -464,18 +783,23 @@ export function VacancyModal({
   styles,
   submittingApplication,
   userData,
+  feedback,
 }) {
+  const { showAlert } = getFeedbackApi(feedback);
   if (!selectedVacancy) return null;
 
   const hasCv = Boolean(userData?.cv_file);
   const hasPortfolio = Boolean(userData?.portofolio_file);
-  const isApplyDisabled = submittingApplication || hasAnyPlacement;
+  const missingRequiredDocuments = !hasCv;
+  const isApplyDisabled = submittingApplication || hasAnyPlacement || missingRequiredDocuments;
 
   const handleProceedToApply = () => {
     if (!hasCv) {
-      alert(
-        'Sebelum lanjut melamar, lengkapi CV terlebih dahulu di tab Profil. Portofolio juga disarankan jika kamu punya.'
-      );
+      showAlert({
+        type: 'warning',
+        title: 'CV Belum Diunggah',
+        message: 'Sebelum lanjut melamar, lengkapi CV terlebih dahulu di tab Profil. Portofolio juga disarankan jika kamu punya.',
+      });
       return;
     }
 
@@ -579,9 +903,10 @@ export function VacancyModal({
                   className="btn-hover"
                   onClick={handleProceedToApply}
                   disabled={isApplyDisabled}
-                  style={{ ...styles.btnPrimary, padding: '12px 30px', fontSize: '15px', backgroundColor: isApplyDisabled ? '#94a3b8' : '#003366', cursor: isApplyDisabled ? 'not-allowed' : 'pointer' }}
+                  title={missingRequiredDocuments ? 'Upload CV di tab Profil terlebih dahulu' : undefined}
+                  style={{ ...styles.btnPrimary, padding: '12px 30px', fontSize: '15px', backgroundColor: isApplyDisabled ? '#94a3b8' : '#003366', color: '#ffffff', cursor: isApplyDisabled ? 'not-allowed' : 'pointer', boxShadow: isApplyDisabled ? 'none' : undefined, opacity: isApplyDisabled ? 0.75 : 1 }}
                 >
-                  {hasAnyPlacement ? <><Lock size={16} /> Terkunci (Sudah Magang)</> : <><Send size={16} /> Lanjut Lamar</>}
+                  {hasAnyPlacement ? <><Lock size={16} /> Terkunci (Sudah Magang)</> : missingRequiredDocuments ? <><Lock size={16} /> Lengkapi CV Dulu</> : <><Send size={16} /> Lanjut Lamar</>}
                 </button>
               )}
             </>
@@ -632,21 +957,220 @@ export function PlacementReportTab({
   acceptanceLetter,
   currentPlacement,
   handlePlacementSubmit,
+  handleRequestSupervisorChange,
   hasApprovedPlacement,
   hasPendingPlacement,
   placementForm,
   setAcceptanceLetter,
   setPlacementForm,
   styles,
+  studentApplications = [],
   submittingPlacement,
+  vacancies = [],
+  onOpenVacanciesTab,
+  feedback,
 }) {
+  const { showAlert } = getFeedbackApi(feedback);
+  const [supervisorChangeModal, setSupervisorChangeModal] = useState({
+    isOpen: false,
+    supervisor_name: '',
+    supervisor_email: '',
+    supervisor_phone: '',
+    reason: '',
+  });
+  const [submittingSupervisorChange, setSubmittingSupervisorChange] = useState(false);
+  const activeInternalApplications = studentApplications.filter((application) =>
+    !application.is_archived_by_admin
+    && ACTIVE_INTERNAL_APPLICATION_STATUSES.includes(application.status)
+  );
+  const hasActiveInternalApplications = activeInternalApplications.length > 0;
+  const hasAcceptedInternalApplication = activeInternalApplications.some(
+    (application) => application.status === 'accepted'
+  );
+  const isTransferFlow = Boolean(hasApprovedPlacement && currentPlacement);
+  const transferMinimumStartDate = isTransferFlow
+    ? getNextDateValue(placementForm.previous_placement_end_date)
+    : '';
+  const previousPlacementWorkingDays = isTransferFlow
+    ? calculateWorkingDays(currentPlacement.start_date, placementForm.previous_placement_end_date)
+    : 0;
+  const requiredNewWorkingDays = isTransferFlow && placementForm.previous_placement_end_date
+    ? Math.max(MIN_INTERNSHIP_WORKING_DAYS - previousPlacementWorkingDays, 1)
+    : MIN_INTERNSHIP_WORKING_DAYS;
+  const minimumEndDate = getMinimumInternshipEndDate(placementForm.start_date, requiredNewWorkingDays);
+  const selectedWorkingDays = calculateWorkingDays(placementForm.start_date, placementForm.end_date);
+  const accumulatedTransferWorkingDays = previousPlacementWorkingDays + selectedWorkingDays;
+  const showDurationWarning = placementForm.start_date
+    && placementForm.end_date
+    && (
+      isTransferFlow
+        ? accumulatedTransferWorkingDays < MIN_INTERNSHIP_WORKING_DAYS
+        : selectedWorkingDays < MIN_INTERNSHIP_WORKING_DAYS
+    );
+  const showTransferOverlapWarning = isTransferFlow
+    && placementForm.previous_placement_end_date
+    && placementForm.start_date
+    && placementForm.start_date <= placementForm.previous_placement_end_date;
+  const supervisorChangePending = currentPlacement?.supervisor_change_status === 'pending';
+  const supervisorChangeRejected = currentPlacement?.supervisor_change_status === 'rejected';
+  const isPlacementSubmitDisabled = submittingPlacement || hasActiveInternalApplications;
+  const placementSubmitStyle = {
+    ...styles.btnPrimary,
+    width: '100%',
+    marginTop: '30px',
+    padding: '16px 22px',
+    minHeight: '56px',
+    fontSize: '16px',
+    borderRadius: '12px',
+    background: hasActiveInternalApplications
+      ? '#94a3b8'
+      : hasApprovedPlacement
+        ? 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)'
+        : 'linear-gradient(135deg, #003366 0%, #004a8f 100%)',
+    color: '#ffffff',
+    fontWeight: '800',
+    cursor: isPlacementSubmitDisabled ? 'not-allowed' : 'pointer',
+    boxShadow: hasActiveInternalApplications
+      ? 'none'
+      : hasApprovedPlacement
+        ? '0 12px 24px rgba(220, 38, 38, 0.24)'
+        : '0 12px 24px rgba(0, 51, 102, 0.24)',
+    opacity: submittingPlacement ? 0.78 : 1,
+    letterSpacing: '0.01em',
+  };
+
+  const openSupervisorChangeModal = () => {
+    setSupervisorChangeModal({
+      isOpen: true,
+      supervisor_name: currentPlacement?.supervisor_name || '',
+      supervisor_email: currentPlacement?.supervisor_email || '',
+      supervisor_phone: currentPlacement?.supervisor_phone || '',
+      reason: '',
+    });
+  };
+
+  const closeSupervisorChangeModal = () => {
+    if (submittingSupervisorChange) return;
+    setSupervisorChangeModal((current) => ({ ...current, isOpen: false }));
+  };
+
+  const submitSupervisorChange = async (event) => {
+    event.preventDefault();
+    setSubmittingSupervisorChange(true);
+
+    const success = await handleRequestSupervisorChange(currentPlacement.id, {
+      supervisor_name: supervisorChangeModal.supervisor_name,
+      supervisor_email: supervisorChangeModal.supervisor_email,
+      supervisor_phone: supervisorChangeModal.supervisor_phone,
+      reason: supervisorChangeModal.reason,
+    });
+
+    setSubmittingSupervisorChange(false);
+    if (success) {
+      setSupervisorChangeModal((current) => ({ ...current, isOpen: false }));
+    }
+  };
+
+  const handlePreviousPlacementEndDateChange = (event) => {
+    const previousEndDate = event.target.value;
+    const newMinimumStartDate = getNextDateValue(previousEndDate);
+    const shouldResetStartDate = placementForm.start_date
+      && newMinimumStartDate
+      && placementForm.start_date < newMinimumStartDate;
+
+    setPlacementForm({
+      ...placementForm,
+      previous_placement_end_date: previousEndDate,
+      start_date: shouldResetStartDate ? '' : placementForm.start_date,
+      end_date: shouldResetStartDate ? '' : placementForm.end_date,
+    });
+  };
+
+  const handleStartDateChange = (event) => {
+    const startDate = event.target.value;
+    const newMinimumEndDate = getMinimumInternshipEndDate(startDate);
+    const shouldResetEndDate = placementForm.end_date
+      && newMinimumEndDate
+      && placementForm.end_date < newMinimumEndDate;
+
+    setPlacementForm({
+      ...placementForm,
+      start_date: startDate,
+      end_date: shouldResetEndDate ? '' : placementForm.end_date,
+    });
+  };
+  const handlePlacementFormSubmit = (event) => {
+    if (hasActiveInternalApplications) {
+      event.preventDefault();
+      showAlert({
+        type: 'warning',
+        title: 'Lamaran Internal Masih Berjalan',
+        message: 'Tarik dulu semua lamaran internal yang masih berjalan di tab Bursa Magang sebelum mengajukan tempat magang luar.',
+      });
+      return;
+    }
+
+    handlePlacementSubmit(event, acceptanceLetter, placementForm);
+  };
+
   return (
     <div className="no-print">
-      <div style={styles.heroBanner}>
-        <h1 style={styles.heroTitle}>{hasApprovedPlacement ? 'Pengajuan Pindah Tempat Magang' : 'Input Data Magang'}</h1>
-        <p style={styles.heroSubtitle}>{hasApprovedPlacement ? 'Gunakan form ini HANYA jika Anda ingin pindah tempat kerja. Data magang saat ini akan diarsipkan.' : 'Daftarkan tempat magang yang Anda dapatkan di luar bursa resmi kami.'}</p>
-      </div>
-      <div style={styles.card}>
+      <div style={{ maxWidth: '1120px', margin: '0 auto' }}>
+        <div style={styles.heroBanner}>
+          <h1 style={styles.heroTitle}>{hasApprovedPlacement ? 'Pengajuan Pindah Tempat Magang' : 'Input Data Magang'}</h1>
+          <p style={styles.heroSubtitle}>{hasApprovedPlacement ? 'Gunakan form ini HANYA jika Anda ingin pindah tempat kerja. Data magang saat ini akan diarsipkan.' : 'Daftarkan tempat magang yang Anda dapatkan di luar bursa resmi kami.'}</p>
+        </div>
+        <div style={styles.card}>
+        {hasApprovedPlacement && currentPlacement && (
+          <div style={{ marginBottom: '24px', border: '1px solid #bfdbfe', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
+            <div style={{ padding: '15px 17px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap', backgroundColor: '#eff6ff', borderBottom: '1px solid #bfdbfe' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffffff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+                  <UserRound size={19} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, color: '#0f172a', fontSize: '15px', fontWeight: '800' }}>Kontak Supervisor Aktif</h3>
+                  <p style={{ margin: '3px 0 0', color: '#64748b', fontSize: '12px', lineHeight: 1.45 }}>Ajukan koreksi jika pembimbing lapangan atau email tujuan evaluasi berubah.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={openSupervisorChangeModal}
+                disabled={supervisorChangePending}
+                className="btn-hover"
+                style={{ ...styles.btnPrimary, padding: '10px 13px', backgroundColor: supervisorChangePending ? '#cbd5e1' : '#003366', cursor: supervisorChangePending ? 'not-allowed' : 'pointer', fontSize: '12px', width: 'auto' }}
+              >
+                <Edit size={14} /> {supervisorChangeRejected ? 'Perbaiki Pengajuan' : 'Ajukan Perubahan'}
+              </button>
+            </div>
+            <div style={{ padding: '15px 17px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '13px' }}>
+              <div>
+                <span style={{ display: 'block', color: '#94a3b8', fontSize: '10px', fontWeight: '800', textTransform: 'uppercase' }}>Nama Supervisor</span>
+                <strong style={{ display: 'block', marginTop: '5px', color: '#334155', fontSize: '13px' }}>{currentPlacement.supervisor_name}</strong>
+              </div>
+              <div>
+                <span style={{ display: 'block', color: '#94a3b8', fontSize: '10px', fontWeight: '800', textTransform: 'uppercase' }}>Email Evaluasi</span>
+                <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px', color: '#334155', fontSize: '13px', overflowWrap: 'anywhere' }}><Mail size={14} /> {currentPlacement.supervisor_email}</strong>
+              </div>
+              <div>
+                <span style={{ display: 'block', color: '#94a3b8', fontSize: '10px', fontWeight: '800', textTransform: 'uppercase' }}>WhatsApp</span>
+                <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px', color: '#334155', fontSize: '13px' }}><Phone size={14} /> {currentPlacement.supervisor_phone || '-'}</strong>
+              </div>
+            </div>
+            {supervisorChangePending && (
+              <div style={{ margin: '0 17px 15px', padding: '12px 13px', borderRadius: '8px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: '12px', lineHeight: 1.6 }}>
+                <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}><Clock size={14} /> Menunggu persetujuan admin</strong>
+                Data usulan: {currentPlacement.pending_supervisor_name} ({currentPlacement.pending_supervisor_email}).
+              </div>
+            )}
+            {supervisorChangeRejected && (
+              <div style={{ margin: '0 17px 15px', padding: '12px 13px', borderRadius: '8px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', fontSize: '12px', lineHeight: 1.6 }}>
+                <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}><XCircle size={14} /> Pengajuan perlu diperbaiki</strong>
+                {currentPlacement.supervisor_change_rejection_reason}
+              </div>
+            )}
+          </div>
+        )}
         {hasPendingPlacement && (
           <div style={styles.alertWarning}>
             <Clock size={24} color="#b45309" style={{ flexShrink: 0 }} />
@@ -661,11 +1185,134 @@ export function PlacementReportTab({
             <ShieldAlert size={24} color="#991b1b" style={{ flexShrink: 0 }} />
             <div>
               <h4 style={{ margin: '0 0 4px 0', color: '#991b1b' }}>Peringatan Pemindahan Data</h4>
-              <p style={{ margin: 0, color: '#991b1b', fontSize: '13px' }}>Status Anda saat ini <strong>Aktif Magang</strong> di {currentPlacement?.company_name}. Jika Anda men-submit form ini, sistem akan <strong>mengarsipkan tempat lama</strong> dan Anda harus mengulang semua laporan bulanan dari nol di tempat baru.</p>
+              <p style={{ margin: 0, color: '#991b1b', fontSize: '13px' }}>Status Anda saat ini <strong>Aktif Magang</strong> di {currentPlacement?.company_name}. Jika pengajuan disetujui admin, sistem akan <strong>menutup tempat lama</strong> sesuai tanggal terakhir bekerja dan menjadikan tempat baru sebagai pengajuan aktif.</p>
             </div>
           </div>
         )}
-        <form onSubmit={(e) => handlePlacementSubmit(e, acceptanceLetter, placementForm)}>
+        <form onSubmit={handlePlacementFormSubmit}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px', marginBottom: '22px' }}>
+            {[
+              { number: '01', label: 'Data Perusahaan', icon: Building2 },
+              { number: '02', label: 'Kontak Supervisor', icon: UserRound },
+              { number: '03', label: 'Bukti Penerimaan', icon: FileCheck },
+            ].map((step) => {
+              const StepIcon = step.icon;
+
+              return (
+                <div key={step.number} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                  <div style={{ width: '30px', height: '30px', borderRadius: '7px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#003366', backgroundColor: '#e6f0fa' }}><StepIcon size={15} /></div>
+                  <div>
+                    <span style={{ display: 'block', color: '#94a3b8', fontSize: '9px', fontWeight: '800' }}>LANGKAH {step.number}</span>
+                    <strong style={{ display: 'block', marginTop: '3px', color: '#334155', fontSize: '11px' }}>{step.label}</strong>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {activeInternalApplications.length > 0 && (
+            <div style={{ marginBottom: '26px', overflow: 'hidden', borderRadius: '18px', border: '1px solid #fed7aa', backgroundColor: '#fff7ed', boxShadow: '0 18px 40px rgba(154, 52, 18, 0.10)' }}>
+              <div style={{ padding: '18px 20px', display: 'flex', alignItems: 'flex-start', gap: '14px', borderBottom: '1px solid #fed7aa', background: 'linear-gradient(135deg, #fff7ed 0%, #fffbeb 100%)' }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '14px', backgroundColor: '#ffedd5', border: '1px solid #fdba74', color: '#9a3412', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <ShieldAlert size={22} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                    <h4 style={{ margin: 0, color: '#9a3412', fontSize: '16px', fontWeight: '900' }}>Lamaran Internal Masih Berjalan</h4>
+                    <span style={{ padding: '6px 10px', borderRadius: '999px', backgroundColor: '#ffffff', border: '1px solid #fed7aa', color: '#9a3412', fontSize: '11px', fontWeight: '900', whiteSpace: 'nowrap' }}>
+                      {activeInternalApplications.length} lamaran aktif
+                    </span>
+                  </div>
+                  <p style={{ margin: '8px 0 0', color: '#9a3412', fontSize: '13px', lineHeight: '1.65' }}>
+                    Selesaikan dulu lamaran dari bursa internal sebelum mengajukan magang luar, supaya data pelamaran dan data tempat magang tidak bertabrakan.
+                    {hasAcceptedInternalApplication ? ' Karena ada lamaran yang sudah diterima perusahaan, tulis alasan penarikan dengan jelas.' : ''}
+                  </p>
+                </div>
+              </div>
+              <div style={{ padding: '18px 20px', display: 'grid', gap: '14px' }}>
+                <div style={{ display: 'grid', gap: '10px' }}>
+                  {activeInternalApplications.map((application) => {
+                    const vacancy = application.vacancy?.id
+                      ? application.vacancy
+                      : vacancies.find((item) => String(item.id) === String(application.vacancy));
+                    const statusStyle = getApplicationStatusStyle(application.status);
+
+                    return (
+                      <div key={application.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', flexWrap: 'wrap', padding: '13px 14px', borderRadius: '13px', backgroundColor: '#ffffff', border: '1px solid #fed7aa' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <strong style={{ display: 'block', color: '#0f172a', fontSize: '13px', fontWeight: '900', marginBottom: '4px' }}>
+                            {vacancy?.title || 'Lowongan internal'}
+                          </strong>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#9a3412', fontSize: '12px', fontWeight: '700' }}>
+                            <Building2 size={14} /> {vacancy?.company_name || 'Perusahaan mitra'}
+                          </span>
+                        </div>
+                        <span style={{ ...statusStyle, display: 'inline-flex', alignItems: 'center', borderRadius: '999px', padding: '6px 10px', fontSize: '11px', fontWeight: '900', whiteSpace: 'nowrap' }}>
+                          {getApplicationStatusLabel(application.status)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap', paddingTop: '2px' }}>
+                  <p style={{ margin: 0, color: '#9a3412', fontSize: '12px', lineHeight: '1.55', fontWeight: '700', maxWidth: '560px' }}>
+                    Klik tombol di samping, pilih lamaran yang ingin ditarik, lalu isi alasan penarikan di modal website.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onOpenVacanciesTab}
+                    className="btn-hover"
+                    style={{ ...styles.btnPrimary, backgroundColor: '#F2A900', color: '#003366', boxShadow: '0 10px 20px rgba(242, 169, 0, 0.25)', width: 'auto' }}
+                  >
+                    <Briefcase size={16} /> Buka Bursa Magang
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {isTransferFlow && (
+            <div style={{ marginBottom: '24px', padding: '18px', borderRadius: '12px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa' }}>
+              <h4 style={{ margin: '0 0 8px 0', color: '#9a3412', fontSize: '15px', fontWeight: '800' }}>Data Pindah Tempat Magang</h4>
+              <p style={{ margin: '0 0 14px 0', color: '#9a3412', fontSize: '13px', lineHeight: '1.6' }}>
+                Tempat lama: <strong>{currentPlacement.company_name}</strong> ({currentPlacement.start_date} s/d {currentPlacement.end_date}). Tanggal mulai tempat baru harus setelah tanggal terakhir bekerja di tempat lama.
+              </p>
+              <div style={styles.grid2}>
+                <div>
+                  <label style={{ ...styles.labelStyle, color: '#9a3412' }}>Tanggal Terakhir Bekerja di Tempat Lama</label>
+                  <input
+                    type="date"
+                    name="previous_placement_end_date"
+                    required
+                    min={currentPlacement.start_date || undefined}
+                    max={currentPlacement.end_date || undefined}
+                    value={placementForm.previous_placement_end_date}
+                    onChange={handlePreviousPlacementEndDateChange}
+                    className="input-focus"
+                    style={{ ...styles.inputStyle, backgroundColor: '#fff' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ ...styles.labelStyle, color: '#9a3412' }}>Alasan Pindah Tempat Magang</label>
+                  <textarea
+                    name="transfer_reason"
+                    rows="3"
+                    required
+                    value={placementForm.transfer_reason}
+                    onChange={(e) => setPlacementForm({ ...placementForm, transfer_reason: e.target.value })}
+                    placeholder="Contoh: Perusahaan lama menghentikan program magang, lalu saya diterima di perusahaan baru."
+                    className="input-focus"
+                    style={{ ...styles.inputStyle, backgroundColor: '#fff', resize: 'vertical' }}
+                  />
+                </div>
+              </div>
+              <div style={{ marginTop: '12px', color: showTransferOverlapWarning ? '#991b1b' : '#9a3412', fontSize: '12px', lineHeight: '1.5', fontWeight: '700' }}>
+                {transferMinimumStartDate
+                  ? `Tanggal mulai tempat baru paling cepat: ${transferMinimumStartDate}.`
+                  : 'Isi tanggal terakhir bekerja untuk membuka batas tanggal mulai tempat baru.'}
+                {placementForm.previous_placement_end_date ? ` Durasi tempat lama yang diakui: ${previousPlacementWorkingDays} hari kerja. Sisa minimal tempat baru: ${requiredNewWorkingDays} hari kerja.` : ''}
+                {showTransferOverlapWarning ? ' Tanggal mulai yang dipilih masih overlap dengan tempat lama.' : ''}
+              </div>
+            </div>
+          )}
           <h4 style={styles.sectionTitle}>1. Data Perusahaan & Posisi</h4>
           <div style={styles.grid2}>
             <div><label style={styles.labelStyle}>Nama Perusahaan</label><input type="text" name="company_name" required value={placementForm.company_name} onChange={(e) => setPlacementForm({ ...placementForm, company_name: e.target.value })} className="input-focus" style={styles.inputStyle} /></div>
@@ -674,8 +1321,11 @@ export function PlacementReportTab({
             <div><label style={styles.labelStyle}>Alamat Lengkap Perusahaan</label><input type="text" name="company_address" required value={placementForm.company_address} onChange={(e) => setPlacementForm({ ...placementForm, company_address: e.target.value })} className="input-focus" style={styles.inputStyle} /></div>
           </div>
           <div style={{ ...styles.grid2, marginTop: '20px' }}>
-            <div><label style={styles.labelStyle}>Tanggal Mulai Magang</label><input type="date" name="start_date" required value={placementForm.start_date} onChange={(e) => setPlacementForm({ ...placementForm, start_date: e.target.value })} className="input-focus" style={styles.inputStyle} /></div>
-            <div><label style={styles.labelStyle}>Tanggal Selesai Magang</label><input type="date" name="end_date" required value={placementForm.end_date} onChange={(e) => setPlacementForm({ ...placementForm, end_date: e.target.value })} className="input-focus" style={styles.inputStyle} /></div>
+            <div><label style={styles.labelStyle}>Tanggal Mulai Magang</label><input type="date" name="start_date" required min={transferMinimumStartDate || undefined} value={placementForm.start_date} onChange={handleStartDateChange} className="input-focus" style={styles.inputStyle} /></div>
+            <div><label style={styles.labelStyle}>Tanggal Selesai Magang</label><input type="date" name="end_date" required min={minimumEndDate || undefined} value={placementForm.end_date} onChange={(e) => setPlacementForm({ ...placementForm, end_date: e.target.value })} className="input-focus" style={styles.inputStyle} /></div>
+          </div>
+          <div style={{ marginTop: '12px', padding: '12px 14px', borderRadius: '8px', border: showDurationWarning ? '1px solid #fecaca' : '1px solid #bfdbfe', backgroundColor: showDurationWarning ? '#fef2f2' : '#eff6ff', color: showDurationWarning ? '#991b1b' : '#1d4ed8', fontSize: '12px', lineHeight: '1.5', fontWeight: '700' }}>
+            {isTransferFlow ? `Akumulasi durasi magang minimal ${MIN_INTERNSHIP_WORKING_DAYS} hari kerja (tempat lama + baru).` : `Durasi magang minimal ${MIN_INTERNSHIP_WORKING_DAYS} hari kerja (Senin-Jumat).`} {placementForm.start_date && minimumEndDate ? `Tanggal selesai paling cepat: ${minimumEndDate}.` : 'Pilih tanggal mulai untuk melihat batas tanggal selesai.'} {placementForm.start_date && placementForm.end_date ? `Durasi pilihan saat ini: ${isTransferFlow ? `${accumulatedTransferWorkingDays} hari kerja total (${previousPlacementWorkingDays} lama + ${selectedWorkingDays} baru)` : `${selectedWorkingDays} hari kerja`}.` : ''}
           </div>
           <h4 style={styles.sectionTitle}>2. Data Supervisor (Pembimbing Lapangan)</h4>
           <div style={styles.grid2}>
@@ -684,15 +1334,66 @@ export function PlacementReportTab({
             <div><label style={styles.labelStyle}>No. WhatsApp Supervisor</label><input type="text" name="supervisor_phone" value={placementForm.supervisor_phone} onChange={(e) => setPlacementForm({ ...placementForm, supervisor_phone: e.target.value })} className="input-focus" style={styles.inputStyle} placeholder="Cth: 08123456789" /></div>
           </div>
           <h4 style={styles.sectionTitle}>3. Dokumen Validasi (Letter of Acceptance)</h4>
-          <div style={{ backgroundColor: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
-            <label style={{ ...styles.labelStyle, marginBottom: '10px' }}>Upload Surat Diterima Magang / Offering Letter (PDF/JPG)</label>
-            <input type="file" accept=".pdf,image/*" required onChange={(e) => setAcceptanceLetter(e.target.files[0])} style={{ ...styles.fileInput, backgroundColor: '#fff' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px dashed #cbd5e1', flexWrap: 'wrap' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#003366', backgroundColor: '#e6f0fa', flexShrink: 0 }}><UploadCloud size={20} /></div>
+            <div style={{ flex: 1, minWidth: '220px' }}>
+              <label style={{ ...styles.labelStyle, marginBottom: '3px' }}>Surat Diterima Magang / Offering Letter</label>
+              <p style={{ margin: '0 0 9px', color: '#64748b', fontSize: '11px', lineHeight: 1.5 }}>Gunakan dokumen PDF atau gambar yang dapat dibaca dengan jelas.</p>
+              <input type="file" accept=".pdf,image/*" required onChange={(e) => setAcceptanceLetter(e.target.files[0])} style={{ ...styles.fileInput, marginTop: 0, backgroundColor: '#fff' }} />
+            </div>
           </div>
-          <button className="btn-hover" type="submit" disabled={submittingPlacement} style={{ ...styles.btnPrimary, width: '100%', marginTop: '30px', padding: '16px', fontSize: '16px', backgroundColor: hasApprovedPlacement ? '#dc2626' : '#F2A900', color: hasApprovedPlacement ? '#ffffff' : '#003366', fontWeight: '700' }}>
-            {submittingPlacement ? <><Loader2 size={18} className="animate-spin" /> Sedang Memproses Data...</> : <><Send size={18} /> {hasApprovedPlacement ? 'SAYA YAKIN, AJUKAN PINDAH TEMPAT' : 'Kirim Data Magang Saya'}</>}
+          <button className="btn-hover" type="submit" disabled={isPlacementSubmitDisabled} style={placementSubmitStyle}>
+            {submittingPlacement ? <><Loader2 size={18} className="animate-spin" /> Sedang Memproses Data...</> : <><Send size={18} /> {hasActiveInternalApplications ? 'Tarik Lamaran Internal Dulu' : hasApprovedPlacement ? 'Ajukan Pindah Tempat Magang' : 'Kirim Data Magang Saya'}</>}
           </button>
         </form>
       </div>
+      </div>
+      {supervisorChangeModal.isOpen && (
+        <div style={styles.modalOverlay}>
+          <div style={{ ...styles.modalContent, maxWidth: '610px' }}>
+            <div style={styles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
+                <div style={{ width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '9px', color: '#1d4ed8', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                  <RefreshCw size={18} />
+                </div>
+                <div>
+                  <h2 style={{ margin: 0, color: '#0f172a', fontSize: '18px', fontWeight: '800' }}>Ajukan Perubahan Supervisor</h2>
+                  <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '12px' }}>Admin akan memeriksa data sebelum email tujuan evaluasi diganti.</p>
+                </div>
+              </div>
+              <button type="button" onClick={closeSupervisorChangeModal} style={styles.closeBtn} aria-label="Tutup form perubahan supervisor"><XCircle size={22} /></button>
+            </div>
+            <form onSubmit={submitSupervisorChange}>
+              <div style={{ padding: '22px 24px', display: 'grid', gap: '16px' }}>
+                <div>
+                  <label style={styles.labelStyle}>Nama Lengkap Supervisor</label>
+                  <input type="text" required value={supervisorChangeModal.supervisor_name} onChange={(event) => setSupervisorChangeModal({ ...supervisorChangeModal, supervisor_name: event.target.value })} className="input-focus" style={styles.inputStyle} />
+                </div>
+                <div>
+                  <label style={styles.labelStyle}>Email Aktif Supervisor</label>
+                  <input type="email" required value={supervisorChangeModal.supervisor_email} onChange={(event) => setSupervisorChangeModal({ ...supervisorChangeModal, supervisor_email: event.target.value })} className="input-focus" style={styles.inputStyle} />
+                  <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '11px', lineHeight: 1.5 }}>Link evaluasi UTS dan UAS berikutnya akan dikirim ke alamat ini setelah disetujui admin.</p>
+                </div>
+                <div>
+                  <label style={styles.labelStyle}>Nomor WhatsApp Supervisor</label>
+                  <input type="text" value={supervisorChangeModal.supervisor_phone} onChange={(event) => setSupervisorChangeModal({ ...supervisorChangeModal, supervisor_phone: event.target.value })} placeholder="Contoh: 08123456789" className="input-focus" style={styles.inputStyle} />
+                </div>
+                <div>
+                  <label style={styles.labelStyle}>Alasan Perubahan</label>
+                  <textarea required rows="4" value={supervisorChangeModal.reason} onChange={(event) => setSupervisorChangeModal({ ...supervisorChangeModal, reason: event.target.value })} placeholder="Contoh: Supervisor sebelumnya berpindah divisi dan penilaian dilanjutkan oleh pembimbing baru." className="input-focus" style={{ ...styles.inputStyle, resize: 'vertical', lineHeight: 1.6 }} />
+                </div>
+              </div>
+              <div style={styles.modalFooter}>
+                <button type="button" onClick={closeSupervisorChangeModal} disabled={submittingSupervisorChange} className="btn-hover" style={{ ...styles.btnPrimary, backgroundColor: '#ffffff', color: '#475569', border: '1px solid #cbd5e1' }}>Batal</button>
+                <button type="submit" disabled={submittingSupervisorChange} className="btn-hover" style={{ ...styles.btnPrimary, backgroundColor: '#003366' }}>
+                  {submittingSupervisorChange ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  {submittingSupervisorChange ? 'Mengirim Pengajuan...' : 'Kirim untuk Ditinjau Admin'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -783,13 +1484,16 @@ export function MonthlyReportsTab({
     <div className="no-print">
       <div style={styles.heroBanner}>
         <h1 style={styles.heroTitle}>Laporan Kemajuan Bulanan</h1>
-        <p style={styles.heroSubtitle}>Evaluasi mandiri secara berkala untuk memantau performa magang Anda.</p>
+        <p style={styles.heroSubtitle}>Catat pekerjaan, pembelajaran, dan perkembangan magang secara berkala.</p>
       </div>
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '30px', alignItems: 'flex-start' }}>
         <div style={{ ...styles.card, flex: 1.5, width: isMobile ? 'auto' : '100%', borderTop: editingReportId ? '4px solid #0ea5e9' : '4px solid #003366' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', borderBottom: '1px solid #e2e8f0', paddingBottom: '15px' }}>
-            <h3 style={{ margin: 0, color: '#003366', fontSize: '18px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}><Edit3 size={20} /> {editingReportId ? 'Mode Revisi Laporan' : 'Buat Laporan Baru'}</h3>
-            {editingReportId && <button type="button" onClick={cancelEditMonthlyReport} style={{ padding: '6px 12px', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Batal Revisi</button>}
+            <div>
+              <h3 style={{ margin: 0, color: '#003366', fontSize: '18px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}><Edit3 size={20} /> {editingReportId ? 'Mode Revisi Laporan' : 'Buat Laporan Baru'}</h3>
+              <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: '12px', lineHeight: 1.5 }}>{editingReportId ? 'Perbarui jawaban yang perlu disesuaikan lalu simpan revisi.' : 'Isi satu laporan untuk setiap bulan masa magang.'}</p>
+            </div>
+            {editingReportId && <button type="button" onClick={cancelEditMonthlyReport} style={{ padding: '7px 10px', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}><XCircle size={14} /> Batal</button>}
           </div>
           <form onSubmit={(e) => handleReportSubmit(e, editingReportId, reportForm)}>
             <div style={{ backgroundColor: '#e6f0fa', padding: '20px', borderRadius: '8px', marginBottom: '25px' }}>
@@ -807,24 +1511,29 @@ export function MonthlyReportsTab({
                 </div>
               </div>
             </div>
+            {isFirstMonthReport && (
+              <div style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '12px 14px', borderRadius: '8px', marginBottom: '20px', fontSize: '13px', lineHeight: '1.5', fontWeight: '600' }}>
+                Ini laporan pertama untuk tempat magang yang dipilih, jadi pertanyaan lengkap wajib diisi satu kali. Laporan berikutnya akan kembali ke format ringkas.
+              </div>
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {isFirstMonthReport && <div><label style={styles.labelStyle}>1. Deskripsikan Profil Perusahaan Singkat</label><textarea name="company_profile" rows="3" required onChange={handleReportChange} value={reportForm.company_profile} className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', resize: 'vertical' }} /></div>}
+              {isFirstMonthReport && <div><label style={styles.labelStyle}>1. Deskripsikan Profil Perusahaan Singkat</label><textarea name="company_profile" rows="3" required onChange={handleReportChange} value={reportForm.company_profile} placeholder="Ceritakan bidang usaha, produk, atau layanan utama perusahaan." className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', resize: 'vertical', lineHeight: 1.65 }} /></div>}
               <div>
                 <label style={styles.labelStyle}>{isFirstMonthReport ? '2. Rincian Pekerjaan (Jobdesk) Selama Sebulan Terakhir' : 'Highlight Pekerjaan (Jobdesk) Bulan Ini'}</label>
-                <textarea name="job_description" rows="4" required onChange={handleReportChange} value={reportForm.job_description} className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', resize: 'vertical' }} />
+                <textarea name="job_description" rows="4" required onChange={handleReportChange} value={reportForm.job_description} placeholder="Tuliskan tugas utama, proyek yang dikerjakan, dan hasil yang sudah dicapai." className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', resize: 'vertical', lineHeight: 1.65 }} />
               </div>
               {isFirstMonthReport && (
                 <>
-                  <div><label style={styles.labelStyle}>3. Bagaimana Suasana Lingkungan & Budaya Kerjanya?</label><textarea name="work_environment" rows="3" required onChange={handleReportChange} value={reportForm.work_environment} className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', resize: 'vertical' }} /></div>
-                  <div><label style={styles.labelStyle}>4. Materi Kuliah Apa yang Paling Berguna di Sini?</label><textarea name="useful_courses" rows="3" required onChange={handleReportChange} value={reportForm.useful_courses} className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', resize: 'vertical' }} /></div>
-                  <div><label style={styles.labelStyle}>5. Keahlian/Skill Baru yang Anda Pelajari</label><textarea name="new_skills" rows="3" required onChange={handleReportChange} value={reportForm.new_skills} className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', resize: 'vertical' }} /></div>
+                  <div><label style={styles.labelStyle}>3. Bagaimana Suasana Lingkungan & Budaya Kerjanya?</label><textarea name="work_environment" rows="3" required onChange={handleReportChange} value={reportForm.work_environment} placeholder="Ceritakan pola kerja tim, komunikasi, atau budaya perusahaan." className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', resize: 'vertical', lineHeight: 1.65 }} /></div>
+                  <div><label style={styles.labelStyle}>4. Materi Kuliah Apa yang Paling Berguna di Sini?</label><textarea name="useful_courses" rows="3" required onChange={handleReportChange} value={reportForm.useful_courses} placeholder="Sebutkan mata kuliah atau konsep yang kamu terapkan selama bekerja." className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', resize: 'vertical', lineHeight: 1.65 }} /></div>
+                  <div><label style={styles.labelStyle}>5. Keahlian atau Skill Baru yang Anda Pelajari</label><textarea name="new_skills" rows="3" required onChange={handleReportChange} value={reportForm.new_skills} placeholder="Tuliskan tools, proses kerja, atau kemampuan baru yang kamu pelajari." className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', resize: 'vertical', lineHeight: 1.65 }} /></div>
                 </>
               )}
             </div>
             <div style={{ marginTop: '30px', borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
               <button className="btn-hover" type="submit" disabled={submittingReport} style={{ ...styles.btnPrimary, backgroundColor: editingReportId ? '#0ea5e9' : '#003366', padding: '14px 24px', fontSize: '15px', width: '100%' }}>
                 {submittingReport ? <Loader2 size={16} className="animate-spin" /> : (editingReportId ? <Save size={16} /> : <Send size={16} />)}
-                {submittingReport ? 'Memproses Dokumen...' : (editingReportId ? 'Simpan Revisi Laporan' : 'Kirim Laporan Bulanan ➔')}
+                {submittingReport ? 'Memproses Dokumen...' : (editingReportId ? 'Simpan Revisi Laporan' : 'Kirim Laporan Bulanan')}
               </button>
             </div>
           </form>
@@ -969,7 +1678,33 @@ export function SubmissionReportTab({
   );
 }
 
-export function CertificatesTab({ certificates, isMobile, loadingCertificates, styles }) {
+const getRefId = (ref) => (ref && typeof ref === 'object' ? ref.id : ref);
+
+const getPlacementSortTime = (placement) => {
+  const rawDate = placement?.start_date || placement?.created_at || placement?.end_date;
+  const parsedDate = rawDate ? new Date(rawDate).getTime() : 0;
+
+  return Number.isNaN(parsedDate) ? 0 : parsedDate;
+};
+
+const getCertificateHistoryPlacements = (certificate, placements = []) => {
+  const certificatePlacementId = getPlacementId(certificate?.placement);
+  const certificateStudentId = getRefId(certificate?.student);
+  const hiddenHistoryStatuses = ['pending', 'rejected'];
+
+  return placements
+    .filter((placement) => {
+      const placementStudentId = getRefId(placement.student);
+      const isSameStudent = !certificateStudentId || String(placementStudentId) === String(certificateStudentId);
+      const isDifferentPlacement = !certificatePlacementId || String(placement.id) !== String(certificatePlacementId);
+      const isDisplayableHistory = !hiddenHistoryStatuses.includes(placement.status);
+
+      return isSameStudent && isDifferentPlacement && isDisplayableHistory && placement.company_name;
+    })
+    .sort((a, b) => getPlacementSortTime(a) - getPlacementSortTime(b));
+};
+
+export function CertificatesTab({ certificates, isMobile, loadingCertificates, placements = [], styles }) {
   return (
     <div>
       <div className="no-print" style={styles.heroBanner}>
@@ -988,32 +1723,50 @@ export function CertificatesTab({ certificates, isMobile, loadingCertificates, s
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-          {certificates.map((cert) => (
-            <div key={cert.id}>
-              <div className="printable-certificate" style={styles.certificateBox}>
-                <h1 style={{ color: '#003366', fontFamily: 'serif', marginBottom: '5px', fontSize: isMobile ? '24px' : '32px' }}>CERTIFICATE OF COMPLETION</h1>
-                <p style={{ color: '#475569', fontSize: '14px', marginBottom: '25px' }}>Diberikan kepada:</p>
-                <h2 style={{ color: '#F2A900', fontSize: isMobile ? '22px' : '28px', margin: '0 0 5px 0' }}>{cert.student.first_name} {cert.student.last_name}</h2>
-                <p style={{ color: '#334155', margin: '0 0 5px 0', fontWeight: 'bold' }}>NIM: {cert.student.nim} | Program Studi: {cert.student.program_studi}</p>
-                <p style={{ margin: '25px 0', lineHeight: '1.6', color: '#475569' }}>
-                  Telah menyelesaikan Program Co-op dengan predikat kelulusan
-                  <br /><strong style={{ fontSize: '18px', color: '#003366' }}>Konversi Nilai: {cert.grade}</strong>
-                </p>
-                <div style={{ borderTop: '2px solid #e2e8f0', paddingTop: '20px', marginTop: '20px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', fontSize: '14px', color: '#64748b', gap: isMobile ? '15px' : '0' }}>
-                  <div style={{ textAlign: isMobile ? 'center' : 'left' }}>
-                    <strong style={{ color: '#334155' }}>Perusahaan:</strong><br />{cert.placement.company_name}
+          {certificates.map((cert) => {
+            const historyPlacements = getCertificateHistoryPlacements(cert, placements);
+
+            return (
+              <div key={cert.id}>
+                <div className="printable-certificate" style={styles.certificateBox}>
+                  <h1 style={{ color: '#003366', fontFamily: 'serif', marginBottom: '5px', fontSize: isMobile ? '24px' : '32px' }}>CERTIFICATE OF COMPLETION</h1>
+                  <p style={{ color: '#475569', fontSize: '14px', marginBottom: '25px' }}>Diberikan kepada:</p>
+                  <h2 style={{ color: '#F2A900', fontSize: isMobile ? '22px' : '28px', margin: '0 0 5px 0' }}>{cert.student.first_name} {cert.student.last_name}</h2>
+                  <p style={{ color: '#334155', margin: '0 0 5px 0', fontWeight: 'bold' }}>NIM: {cert.student.nim} | Program Studi: {cert.student.program_studi}</p>
+                  <p style={{ margin: '25px 0', lineHeight: '1.6', color: '#475569' }}>
+                    Telah menyelesaikan Program Co-op dengan predikat kelulusan
+                    <br /><strong style={{ fontSize: '18px', color: '#003366' }}>Konversi Nilai: {cert.grade}</strong>
+                  </p>
+                  <div style={{ borderTop: '2px solid #e2e8f0', paddingTop: '20px', marginTop: '20px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', fontSize: '14px', color: '#64748b', gap: isMobile ? '15px' : '0' }}>
+                    <div style={{ textAlign: isMobile ? 'center' : 'left' }}>
+                      <strong style={{ color: '#334155' }}>Perusahaan:</strong><br />{cert.placement.company_name}
+                    </div>
+                    <div style={{ textAlign: isMobile ? 'center' : 'right' }}>
+                      <strong style={{ color: '#334155' }}>Periode Magang:</strong><br />
+                      {cert.placement.start_date} s/d {cert.placement.end_date}
+                    </div>
                   </div>
-                  <div style={{ textAlign: isMobile ? 'center' : 'right' }}>
-                    <strong style={{ color: '#334155' }}>Periode Magang:</strong><br />
-                    {cert.placement.start_date} s/d {cert.placement.end_date}
-                  </div>
+                  {historyPlacements.length > 0 && (
+                    <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px dashed #cbd5e1', textAlign: isMobile ? 'center' : 'left', fontSize: '13px', color: '#64748b', lineHeight: '1.6' }}>
+                      <strong style={{ color: '#334155' }}>Perusahaan Sebelumnya:</strong>
+                      <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {historyPlacements.map((placement) => (
+                          <span key={placement.id}>
+                            {placement.company_name}
+                            {placement.position ? ` - ${placement.position}` : ''}
+                            {(placement.start_date || placement.end_date) ? ` (${placement.start_date || '-'} s/d ${placement.end_date || '-'})` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
+                <button className="btn-hover no-print" onClick={() => window.print()} style={{ ...styles.btnPrimary, width: '100%', padding: '15px', marginTop: '15px', fontSize: '16px', backgroundColor: '#003366' }}>
+                  <Printer size={20} /> Cetak / Download PDF Sertifikat
+                </button>
               </div>
-              <button className="btn-hover no-print" onClick={() => window.print()} style={{ ...styles.btnPrimary, width: '100%', padding: '15px', marginTop: '15px', fontSize: '16px', backgroundColor: '#003366' }}>
-                <Printer size={20} /> Cetak / Download PDF Sertifikat
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

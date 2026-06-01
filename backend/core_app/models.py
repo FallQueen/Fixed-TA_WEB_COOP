@@ -23,6 +23,17 @@ class User(AbstractUser):
     
     # Penanda role
     is_mahasiswa = models.BooleanField(default=True)
+    REGISTRATION_STATUS_CHOICES = [
+        ('pending', 'Menunggu Persetujuan'),
+        ('approved', 'Disetujui'),
+        ('rejected', 'Ditolak'),
+    ]
+    registration_status = models.CharField(
+        max_length=20,
+        choices=REGISTRATION_STATUS_CHOICES,
+        default='pending',
+    )
+    registration_rejection_reason = models.TextField(blank=True, default='')
 
     def __str__(self):
         return self.email # Tampilkan email sebagai nama utama di sistem
@@ -61,9 +72,14 @@ class Application(models.Model):
         ('pending', 'Menunggu Review'),
         ('reviewed', 'Telah Diteruskan ke HRD'),
         ('accepted', 'Diterima Perusahaan'),
-        ('rejected', 'Ditolak Perusahaan')
+        ('rejected', 'Ditolak Perusahaan'),
+        ('withdrawn', 'Ditarik Mahasiswa')
     ]
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    withdrawal_reason = models.TextField(blank=True, null=True)
+    withdrawn_at = models.DateTimeField(blank=True, null=True)
+    is_archived_by_admin = models.BooleanField(default=False)
+    archived_at = models.DateTimeField(blank=True, null=True)
     applied_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -90,9 +106,27 @@ class Placement(models.Model):
     supervisor_name = models.CharField(max_length=255)
     supervisor_email = models.EmailField()
     supervisor_phone = models.CharField(max_length=20, null=True, blank=True)
+    SUPERVISOR_CHANGE_STATUS_CHOICES = [
+        ('none', 'Tidak Ada Pengajuan'),
+        ('pending', 'Menunggu Persetujuan'),
+        ('rejected', 'Ditolak Admin'),
+    ]
+    pending_supervisor_name = models.CharField(max_length=255, blank=True, default='')
+    pending_supervisor_email = models.EmailField(blank=True, default='')
+    pending_supervisor_phone = models.CharField(max_length=20, blank=True, default='')
+    supervisor_change_reason = models.TextField(blank=True, default='')
+    supervisor_change_status = models.CharField(
+        max_length=20,
+        choices=SUPERVISOR_CHANGE_STATUS_CHOICES,
+        default='none',
+    )
+    supervisor_change_rejection_reason = models.TextField(blank=True, default='')
+    supervisor_change_requested_at = models.DateTimeField(null=True, blank=True)
     
     # File Bukti Diterima
     acceptance_letter = models.FileField(upload_to='dokumen_placement/')
+    previous_placement_end_date = models.DateField(null=True, blank=True)
+    transfer_reason = models.TextField(blank=True, default='')
     
     # [UPDATE] Penambahan status baru untuk mengakomodasi histori
     STATUS_CHOICES = [
@@ -103,6 +137,7 @@ class Placement(models.Model):
         ('completed', 'Selesai Magang')
     ]
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    rejection_reason = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     is_approved = models.BooleanField(default=False)
 
@@ -259,6 +294,8 @@ class Notification(models.Model):
     title = models.CharField(max_length=255)
     message = models.TextField()
     target_tab = models.CharField(max_length=50, blank=True, null=True)
+    action_url = models.URLField(blank=True, default='')
+    action_label = models.CharField(max_length=100, blank=True, default='')
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

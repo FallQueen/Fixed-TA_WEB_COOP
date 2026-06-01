@@ -1,4 +1,5 @@
 import { stemRed } from '../../../styles/adminstyles';
+import { adminColors } from './sharedTabStyles';
 
 const wrapStyle = (isMobile) => ({
   display: 'flex',
@@ -9,7 +10,7 @@ const wrapStyle = (isMobile) => ({
 });
 
 const labelStyle = {
-  color: '#94a3b8',
+  color: adminColors.textSubtle,
   fontSize: '10px',
   fontWeight: '900',
   textTransform: 'uppercase',
@@ -19,8 +20,8 @@ const labelStyle = {
 const trackStyle = {
   display: 'inline-flex',
   alignItems: 'center',
-  backgroundColor: '#f5f7fb',
-  border: '1px solid #edf2f7',
+  backgroundColor: adminColors.panel,
+  border: `1px solid ${adminColors.borderSoft}`,
   borderRadius: '999px',
   padding: '3px',
   gap: '2px',
@@ -32,8 +33,8 @@ const buttonStyle = (active) => ({
   borderRadius: '999px',
   padding: '8px 14px',
   minWidth: '82px',
-  backgroundColor: active ? '#ffffff' : 'transparent',
-  color: active ? stemRed : '#64748b',
+  backgroundColor: active ? adminColors.surface : 'transparent',
+  color: active ? stemRed : adminColors.textMuted,
   boxShadow: active ? '0 7px 18px rgba(15, 23, 42, 0.07)' : 'none',
   cursor: 'pointer',
   fontFamily: 'inherit',

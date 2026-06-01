@@ -1,8 +1,12 @@
 import { Activity, Eye, Mail, Send, UserRoundSearch } from 'lucide-react';
 import {
+  actionButtonGroup,
+  actionCell,
+  actionIconButton,
   badge,
   compactButton,
   emptyState,
+  metricTone,
   metricCard,
   metricGrid,
   tabPageHeader,
@@ -13,6 +17,7 @@ import {
 } from './sharedTabStyles';
 import GuidancePanel from './GuidancePanel';
 import PaginationControls from './PaginationControls';
+import ProgressStatusPanel from './ProgressStatusPanel';
 import StatusSegmentedControl from './StatusSegmentedControl';
 import useLocalNotes from './useLocalNotes';
 import usePagedData from './usePagedData';
@@ -36,6 +41,13 @@ function JobSeekerTab({
   const withReports = jobSeekerFiltered.filter((student) => getStudentWeeklyReports(student).length > 0).length;
   const withoutReports = jobSeekerFiltered.length - withReports;
   const waitingApproval = jobSeekerFiltered.filter((student) => getPendingPlacement(student)).length;
+  const monitoredCount = jobSeekerFiltered.filter((student) => (
+    getStudentWeeklyReports(student).length > 0 || getPendingPlacement(student)
+  )).length;
+  const jobSeekerProgressPercent = jobSeekerFiltered.length > 0
+    ? Math.round((monitoredCount / jobSeekerFiltered.length) * 100)
+    : 100;
+  const needsFollowUpCount = jobSeekerFiltered.length - monitoredCount;
   const { notes, updateNote } = useLocalNotes('admin-job-seeker-follow-up-notes');
   const {
     page,
@@ -47,10 +59,10 @@ function JobSeekerTab({
   } = usePagedData(jobSeekerFiltered);
 
   const metrics = [
-    { icon: UserRoundSearch, label: 'Job Seeker', value: jobSeekerFiltered.length, tint: '#eef2ff', color: '#4f46e5' },
-    { icon: Activity, label: 'Pernah Lapor', value: withReports, tint: '#ecfdf5', color: '#10b981' },
-    { icon: Mail, label: 'Belum Pernah Lapor', value: withoutReports, tint: '#fff1f2', color: '#f43f5e' },
-    { icon: Send, label: 'Menunggu ACC', value: waitingApproval, tint: '#fff7ed', color: '#f97316' },
+    { icon: UserRoundSearch, label: 'Job Seeker', value: jobSeekerFiltered.length, ...metricTone('info') },
+    { icon: Activity, label: 'Pernah Lapor', value: withReports, ...metricTone('success') },
+    { icon: Mail, label: 'Belum Pernah Lapor', value: withoutReports, ...metricTone('danger') },
+    { icon: Send, label: 'Menunggu ACC', value: waitingApproval, ...metricTone('warning') },
   ];
 
   return (
@@ -85,6 +97,18 @@ function JobSeekerTab({
           </div>
         </div>
 
+        <ProgressStatusPanel
+          isMobile={isMobile}
+          icon={Activity}
+          label="Progress Monitoring"
+          title={needsFollowUpCount > 0 ? `${needsFollowUpCount} job seeker belum punya sinyal progress` : 'Semua job seeker pada filter ini sudah terpantau'}
+          description="Mahasiswa dianggap terpantau jika sudah pernah mengirim laporan mingguan atau sudah mengajukan tempat magang yang menunggu ACC."
+          percent={jobSeekerProgressPercent}
+          tone={needsFollowUpCount > 0 ? 'warning' : 'success'}
+          meta={`${monitoredCount}/${jobSeekerFiltered.length} mahasiswa terpantau`}
+          percentLabel="terpantau"
+        />
+
         <div style={{ marginBottom: '22px' }}>
           <StatusSegmentedControl
             value={filterStatusJobSeeker}
@@ -107,7 +131,7 @@ function JobSeekerTab({
                 <th style={styles.th}>Program Studi</th>
                 <th style={styles.th}>Status Progress</th>
                 <th style={styles.th}>Catatan Follow Up</th>
-                <th style={{ ...styles.th, borderTopRightRadius: '16px' }}>Aksi & Follow-up</th>
+                <th style={{ ...styles.th, ...actionCell, borderTopRightRadius: '16px' }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -146,14 +170,25 @@ function JobSeekerTab({
                         style={{ width: '220px', minHeight: '58px', resize: 'vertical', border: '1px solid #e8eef7', borderRadius: '10px', padding: '9px 10px', color: '#334155', backgroundColor: '#f8fafc', fontSize: '11px', fontFamily: 'inherit', fontWeight: '600' }}
                       />
                     </td>
-                    <td style={styles.td}>
-                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                        <button className="btn-hover" onClick={() => setSelectedStudentReports({ student, reports: mhsWeeklyReports })} style={compactButton(styles, 'primary')}>
-                          <Eye size={14} /> Lihat Riwayat
+                    <td style={{ ...styles.td, ...actionCell }}>
+                      <div style={actionButtonGroup(isMobile)}>
+                        <button
+                          className="btn-hover"
+                          onClick={() => setSelectedStudentReports({ student, reports: mhsWeeklyReports })}
+                          style={actionIconButton('primary')}
+                          title="Lihat riwayat progress"
+                          aria-label={`Lihat riwayat progress ${student.first_name || student.email || 'mahasiswa'}`}
+                        >
+                          <Eye size={15} />
                         </button>
-
-                        <button className="btn-hover" onClick={() => openEmailModal('job_seeker', student.id, `${student.first_name} ${student.last_name}`)} style={compactButton(styles, 'neutral')}>
-                          <Mail size={14} /> Ingatkan
+                        <button
+                          className="btn-hover"
+                          onClick={() => openEmailModal('job_seeker', student.id, `${student.first_name} ${student.last_name}`)}
+                          style={actionIconButton('neutral')}
+                          title="Kirim reminder"
+                          aria-label={`Kirim reminder ke ${student.first_name || student.email || 'mahasiswa'}`}
+                        >
+                          <Mail size={15} />
                         </button>
                       </div>
                     </td>

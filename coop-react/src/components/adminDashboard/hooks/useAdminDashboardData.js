@@ -41,19 +41,10 @@ export default function useAdminDashboardData({ navigate, onUnauthorized }) {
     const allVacancies = response.data;
     const today = normalizeDateOnly(new Date());
 
-    const expiredVacancies = allVacancies.filter((job) => {
-      const expiryDate = normalizeDateOnly(job.expires_at);
-      return expiryDate && expiryDate < today;
-    });
-
     const activeVacancies = allVacancies.filter((job) => {
       const expiryDate = normalizeDateOnly(job.expires_at);
       return !expiryDate || expiryDate >= today;
     });
-
-    if (expiredVacancies.length > 0) {
-      await Promise.all(expiredVacancies.map((job) => api.delete(`${API_ROUTES.vacancies}${job.id}/`)));
-    }
 
     setVacancies(activeVacancies);
   }, []);

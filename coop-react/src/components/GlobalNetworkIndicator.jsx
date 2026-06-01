@@ -50,18 +50,13 @@ export default function GlobalNetworkIndicator() {
   useEffect(() => subscribeToNetworkActivity(setPendingCount), []);
 
   useEffect(() => {
-    let timerId;
-
-    if (pendingCount > 0) {
-      timerId = window.setTimeout(() => setVisible(true), 120);
-    } else {
-      setVisible(false);
-    }
+    const timerId = window.setTimeout(
+      () => setVisible(pendingCount > 0),
+      pendingCount > 0 ? 120 : 0
+    );
 
     return () => {
-      if (timerId) {
-        window.clearTimeout(timerId);
-      }
+      window.clearTimeout(timerId);
     };
   }, [pendingCount]);
 

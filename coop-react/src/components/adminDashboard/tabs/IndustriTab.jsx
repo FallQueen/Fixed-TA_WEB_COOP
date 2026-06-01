@@ -3,6 +3,7 @@ import {
   badge,
   compactButton,
   emptyState,
+  metricTone,
   metricCard,
   metricGrid,
   tabPageHeader,
@@ -25,9 +26,9 @@ function IndustriTab({ styles, isMobile, industries, handleExportIndustries }) {
     totalPages,
   } = usePagedData(industries);
   const metrics = [
-    { icon: Building2, label: 'Mitra Terdaftar', value: industries.length, tint: '#eef2ff', color: '#4f46e5' },
-    { icon: Mail, label: 'Email Tersimpan', value: industries.filter((item) => item.supervisor_email).length, tint: '#ecfdf5', color: '#10b981' },
-    { icon: Phone, label: 'Kontak Telepon', value: industries.filter((item) => item.supervisor_phone).length, tint: '#fff7ed', color: '#f97316' },
+    { icon: Building2, label: 'Mitra Terdaftar', value: industries.length, ...metricTone('info') },
+    { icon: Mail, label: 'Email Tersimpan', value: industries.filter((item) => item.supervisor_email).length, ...metricTone('success') },
+    { icon: Phone, label: 'Kontak Telepon', value: industries.filter((item) => item.supervisor_phone).length, ...metricTone('warning') },
   ];
 
   return (

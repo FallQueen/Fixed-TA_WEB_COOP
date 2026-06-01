@@ -16,6 +16,7 @@ import {
   getEvaluasiFiltered,
   getJobSeekerFiltered,
   getOverviewStudentsFiltered,
+  getRegistrationStatus,
   getUniqueProdis,
 } from '../helpers';
 
@@ -74,15 +75,16 @@ export default function useAdminDashboardViewState({
   );
   const prodiFilteredPending = filterUsersByProdi(pendingUsers, filterProdi);
   const prodiFilteredActive = filterUsersByProdi(students, filterProdi);
-  const filteredPending = prodiFilteredPending.filter((user) =>
+  const filteredInactive = prodiFilteredPending.filter((user) =>
     matchesLowerQuery(user.first_name, user.last_name, user.nim, user.program_studi, user.email)
   );
+  const filteredPending = filteredInactive.filter((user) => getRegistrationStatus(user) !== 'rejected');
   const filteredActive = prodiFilteredActive.filter((student) =>
     matchesLowerQuery(student.first_name, student.last_name, student.nim, student.program_studi, student.email)
   );
   const overviewStudentsFiltered = getOverviewStudentsFiltered(prodiFilteredActive, placements, filterStatusMagang, lowerQuery);
-  const approvalDataFiltered = getApprovalDataFiltered(filteredPending, filteredActive, filterStatusAkun);
-  const applicationsFiltered = getApplicationsFiltered(applications, students, vacancies, filterStatusPelamar, filterProdi, lowerQuery);
+  const approvalDataFiltered = getApprovalDataFiltered(filteredInactive, filteredActive, filterStatusAkun);
+  const applicationsFiltered = getApplicationsFiltered(applications, students, vacancies, placements, certificates, filterStatusPelamar, filterProdi, lowerQuery);
   const evaluasiFiltered = getEvaluasiFiltered(placements, evaluations, students, filterStatusEvaluasi, filterProdi, lowerQuery);
   const jobSeekerFiltered = getJobSeekerFiltered(prodiFilteredActive, placements, weeklyReports, filterStatusJobSeeker, lowerQuery);
   const berkasFiltered = getBerkasFiltered(placements, certificates, students, filterStatusBerkas, filterProdi, lowerQuery);
@@ -182,6 +184,7 @@ export default function useAdminDashboardViewState({
     isUpdatingProfile,
     setIsUpdatingProfile,
     filteredPending,
+    filteredInactive,
     overviewStudentsFiltered,
     approvalDataFiltered,
     applicationsFiltered,

@@ -248,4 +248,18 @@ default_sender = EMAIL_HOST_USER or 'no-reply@coop.local'
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'Admin Co-op Prasmul <{default_sender}>')
 FRONTEND_BASE_URL = os.getenv('FRONTEND_BASE_URL', 'http://localhost:5173')
 
+# --- MICROSOFT / AZURE AD SSO ---
+MICROSOFT_SSO_CLIENT_ID = env_first('MICROSOFT_SSO_CLIENT_ID', 'AZURE_AD_CLIENT_ID', default='')
+MICROSOFT_SSO_TENANT_ID = env_first('MICROSOFT_SSO_TENANT_ID', 'AZURE_AD_TENANT_ID', default='')
+MICROSOFT_SSO_CLIENT_SECRET = env_first('MICROSOFT_SSO_CLIENT_SECRET', 'AZURE_AD_CLIENT_SECRET', default='')
+MICROSOFT_SSO_REDIRECT_URI = os.getenv(
+    'MICROSOFT_SSO_REDIRECT_URI',
+    'http://localhost:8000/api/auth/microsoft/callback/',
+)
+MICROSOFT_SSO_SCOPES = env_list('MICROSOFT_SSO_SCOPES', 'openid,profile,email,User.Read')
+MICROSOFT_SSO_FRONTEND_CALLBACK_PATH = os.getenv(
+    'MICROSOFT_SSO_FRONTEND_CALLBACK_PATH',
+    '/auth/microsoft/callback',
+)
+
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

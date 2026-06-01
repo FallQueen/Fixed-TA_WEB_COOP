@@ -5,6 +5,8 @@ import StudentDashboard from './components/StudentDashboard'; // <-- Import Dash
 import AdminDashboard from './components/AdminDashboard'; // <-- Import Dashboard Admin-nya
 import SupervisorForm from './components/SupervisorForm';
 import GlobalNetworkIndicator from './components/GlobalNetworkIndicator';
+import MicrosoftAuthCallback from './components/MicrosoftAuthCallback';
+import ResetPassword from './components/ResetPassword';
 
 function App() {
   return (
@@ -13,6 +15,8 @@ function App() {
       <Routes>
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
+        <Route path="/auth/microsoft/callback" element={<MicrosoftAuthCallback />} />
         
         {/* Rute ke Dashboard Sungguhan */}
         <Route path="/dashboard" element={<StudentDashboard />} />

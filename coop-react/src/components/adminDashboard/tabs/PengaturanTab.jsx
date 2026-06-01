@@ -10,9 +10,11 @@ import {
   UserCog,
 } from 'lucide-react';
 import {
+  adminColors,
   badge,
   compactButton,
   innerPanel,
+  statusTones,
   tabPageHeader,
   tabSubtitle,
   tabTitle,
@@ -33,14 +35,14 @@ const iconBox = (backgroundColor, color) => ({
 
 const sectionTitle = {
   margin: 0,
-  color: '#111827',
+  color: adminColors.text,
   fontSize: '16px',
   fontWeight: '900',
 };
 
 const helperText = {
   margin: '5px 0 0',
-  color: '#94a3b8',
+  color: adminColors.textSubtle,
   fontSize: '11px',
   fontWeight: '600',
   lineHeight: 1.5,
@@ -48,7 +50,7 @@ const helperText = {
 
 const cardHeader = (isMobile) => ({
   padding: '18px',
-  borderBottom: '1px solid #edf2f7',
+  borderBottom: `1px solid ${adminColors.borderSoft}`,
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: isMobile ? 'flex-start' : 'center',
@@ -84,10 +86,10 @@ function PengaturanTab({
   ];
   const strengthScore = passwordChecks.filter((item) => item.met).length;
   const strengthPercent = (strengthScore / passwordChecks.length) * 100;
-  const strengthColor = strengthScore >= 4 ? '#10b981' : strengthScore >= 2 ? '#f59e0b' : '#ef4444';
+  const strengthColor = strengthScore >= 4 ? statusTones.success.color : strengthScore >= 2 ? statusTones.warning.color : statusTones.danger.color;
   const strengthLabel = strengthScore >= 4 ? 'Kuat' : strengthScore >= 2 ? 'Cukup' : 'Lemah';
   const hasNewPassword = Boolean(passwordForm.new_password);
-  const strengthTextColor = hasNewPassword ? strengthColor : '#94a3b8';
+  const strengthTextColor = hasNewPassword ? strengthColor : adminColors.textSubtle;
 
   return (
     <div>
@@ -103,7 +105,7 @@ function PengaturanTab({
           <div style={{ ...styles.card, marginBottom: 0, overflow: 'hidden', padding: 0 }}>
             <div style={cardHeader(isMobile)}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={iconBox('#fff1f2', '#b31312')}>
+                <div style={iconBox(statusTones.primary.tint, statusTones.primary.color)}>
                   <UserCog size={19} />
                 </div>
                 <div style={{ minWidth: 0 }}>
@@ -118,7 +120,7 @@ function PengaturanTab({
               <div style={{ marginBottom: '16px' }}>
                 <label style={styles.labelStyle}>ID Login</label>
                 <div style={{ position: 'relative' }}>
-                  <Fingerprint size={15} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                  <Fingerprint size={15} color={adminColors.textSubtle} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
                   <input
                     type="text"
                     name="username"
@@ -165,7 +167,7 @@ function PengaturanTab({
         <div style={{ ...styles.card, marginBottom: 0, overflow: 'hidden', padding: 0 }}>
           <div style={cardHeader(isMobile)}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={iconBox('#fff1f2', '#b31312')}>
+              <div style={iconBox(statusTones.primary.tint, statusTones.primary.color)}>
                 <LockKeyhole size={19} />
               </div>
               <div>
@@ -199,29 +201,29 @@ function PengaturanTab({
 
                 <div style={{ marginTop: '14px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                    <span style={{ color: '#64748b', fontSize: '11px', fontWeight: '900' }}>Kekuatan kata sandi</span>
+                    <span style={{ color: adminColors.textMuted, fontSize: '11px', fontWeight: '900' }}>Kekuatan kata sandi</span>
                     <span style={{ color: strengthTextColor, fontSize: '11px', fontWeight: '900' }}>{hasNewPassword ? strengthLabel : 'Belum dicek'}</span>
                   </div>
-                  <div style={{ height: '8px', backgroundColor: '#edf2f7', borderRadius: '999px', overflow: 'hidden' }}>
-                    <div style={{ width: `${hasNewPassword ? strengthPercent : 0}%`, height: '100%', backgroundColor: hasNewPassword ? strengthColor : '#cbd5e1', borderRadius: '999px', transition: 'width 0.2s ease' }} />
+                  <div style={{ height: '8px', backgroundColor: adminColors.borderSoft, borderRadius: '999px', overflow: 'hidden' }}>
+                    <div style={{ width: `${hasNewPassword ? strengthPercent : 0}%`, height: '100%', backgroundColor: hasNewPassword ? strengthColor : adminColors.line, borderRadius: '999px', transition: 'width 0.2s ease' }} />
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '8px', marginTop: '12px' }}>
                     {passwordChecks.map((item) => (
-                      <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '7px', color: item.met ? '#166534' : '#94a3b8', fontSize: '11px', fontWeight: '800' }}>
-                        <CheckCircle size={13} color={item.met ? '#10b981' : '#cbd5e1'} />
+                      <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '7px', color: item.met ? statusTones.success.foreground : adminColors.textSubtle, fontSize: '11px', fontWeight: '800' }}>
+                        <CheckCircle size={13} color={item.met ? statusTones.success.color : adminColors.line} />
                         {item.label}
                       </div>
                     ))}
                   </div>
 
                   {passwordMismatch && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444', fontSize: '12px', marginTop: '12px', fontWeight: '900' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: statusTones.danger.color, fontSize: '12px', marginTop: '12px', fontWeight: '900' }}>
                       <AlertCircle size={13} /> Kata sandi tidak cocok
                     </span>
                   )}
                   {passwordMatch && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '12px', marginTop: '12px', fontWeight: '900' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: statusTones.success.color, fontSize: '12px', marginTop: '12px', fontWeight: '900' }}>
                       <CheckCircle size={13} /> Kata sandi cocok
                     </span>
                   )}

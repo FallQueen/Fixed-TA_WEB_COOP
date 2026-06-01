@@ -1,8 +1,11 @@
-import { BriefcaseBusiness, CheckCircle, Eye, UserRoundCheck, UsersRound, XCircle } from 'lucide-react';
+import { BriefcaseBusiness, CheckCircle, Eye, Trash2, UserRoundCheck, UsersRound, XCircle } from 'lucide-react';
 import {
+  actionButtonGroup,
+  actionCell,
+  actionIconButton,
   badge,
-  compactButton,
   emptyState,
+  metricTone,
   metricCard,
   metricGrid,
   tabPageHeader,
@@ -11,6 +14,7 @@ import {
   tableShell,
 } from './sharedTabStyles';
 import GuidancePanel from './GuidancePanel';
+import ProgressStatusPanel from './ProgressStatusPanel';
 import StatusSegmentedControl from './StatusSegmentedControl';
 
 function PelamarTab({
@@ -22,13 +26,20 @@ function PelamarTab({
   students,
   vacancies,
   setSelectedApplication,
+  handleArchiveApplication,
 }) {
   const metrics = [
-    { icon: UsersRound, label: 'Total Pelamar', value: applicationsFiltered.length, tint: '#eef2ff', color: '#4f46e5' },
-    { icon: BriefcaseBusiness, label: 'Menunggu Review', value: applicationsFiltered.filter((app) => app.status === 'pending').length, tint: '#fff7ed', color: '#f97316' },
-    { icon: UserRoundCheck, label: 'Diterima', value: applicationsFiltered.filter((app) => app.status === 'accepted').length, tint: '#ecfdf5', color: '#10b981' },
-    { icon: XCircle, label: 'Ditolak', value: applicationsFiltered.filter((app) => app.status === 'rejected').length, tint: '#fff1f2', color: '#f43f5e' },
+    { icon: UsersRound, label: 'Total Pelamar', value: applicationsFiltered.length, ...metricTone('info') },
+    { icon: BriefcaseBusiness, label: 'Menunggu Review', value: applicationsFiltered.filter((app) => app.status === 'pending').length, ...metricTone('warning') },
+    { icon: UserRoundCheck, label: 'Diterima', value: applicationsFiltered.filter((app) => app.status === 'accepted').length, ...metricTone('success') },
+    { icon: XCircle, label: 'Ditolak', value: applicationsFiltered.filter((app) => app.status === 'rejected').length, ...metricTone('danger') },
+    { icon: XCircle, label: 'Ditarik', value: applicationsFiltered.filter((app) => app.status === 'withdrawn').length, ...metricTone('neutral') },
   ];
+  const pendingReviewCount = applicationsFiltered.filter((app) => app.status === 'pending').length;
+  const processedApplicationCount = applicationsFiltered.length - pendingReviewCount;
+  const reviewProgressPercent = applicationsFiltered.length > 0
+    ? Math.round((processedApplicationCount / applicationsFiltered.length) * 100)
+    : 100;
   const priorityQueue = applicationsFiltered
     .filter((app) => app.status === 'pending')
     .map((app) => {
@@ -48,12 +59,13 @@ function PelamarTab({
     if (status === 'reviewed') return <span style={badge('info')}>Telah Diteruskan</span>;
     if (status === 'accepted') return <span style={badge('success')}><CheckCircle size={13} /> Diterima Magang</span>;
     if (status === 'rejected') return <span style={badge('danger')}>Ditolak</span>;
+    if (status === 'withdrawn') return <span style={badge('neutral')}>Ditarik Mahasiswa</span>;
     return <span style={badge('neutral')}>{status || '-'}</span>;
   };
 
   return (
     <div>
-      <div style={metricGrid(isMobile)}>
+      <div style={metricGrid(isMobile, 5)}>
         {metrics.map((item) => {
           const Icon = item.icon;
 
@@ -73,10 +85,22 @@ function PelamarTab({
         <div style={tabPageHeader(isMobile)}>
           <div>
             <h2 style={tabTitle(isMobile)}>Daftar Pelamar</h2>
-            <p style={tabSubtitle}>Review CV, pesan, dan status lamaran mahasiswa untuk lowongan mitra.</p>
+            <p style={tabSubtitle}>Review CV, pesan, dan status lamaran aktif. Mahasiswa yang sudah magang/lulus tidak ditampilkan di daftar ini.</p>
           </div>
 
         </div>
+
+        <ProgressStatusPanel
+          isMobile={isMobile}
+          icon={BriefcaseBusiness}
+          label="Progress Review"
+          title={pendingReviewCount > 0 ? `${pendingReviewCount} lamaran masih menunggu review` : 'Semua lamaran pada filter ini sudah ditindaklanjuti'}
+          description="Progress dihitung dari lamaran yang statusnya sudah diteruskan, diterima, ditolak, atau ditarik dari daftar pelamar aktif."
+          percent={reviewProgressPercent}
+          tone={pendingReviewCount > 0 ? 'warning' : 'success'}
+          meta={`${processedApplicationCount}/${applicationsFiltered.length} ditindaklanjuti`}
+          percentLabel="ditindaklanjuti"
+        />
 
         <div style={{ marginBottom: '22px' }}>
           <StatusSegmentedControl
@@ -86,8 +110,10 @@ function PelamarTab({
             options={[
               { value: '', label: 'Semua' },
               { value: 'review', label: 'Review' },
+              { value: 'diteruskan', label: 'Diteruskan' },
               { value: 'diterima', label: 'Diterima' },
               { value: 'ditolak', label: 'Ditolak' },
+              { value: 'ditarik', label: 'Ditarik' },
             ]}
           />
         </div>
@@ -100,7 +126,7 @@ function PelamarTab({
                 <th style={styles.th}>Posisi & Perusahaan</th>
                 <th style={styles.th}>Tanggal Apply</th>
                 <th style={styles.th}>Status</th>
-                <th style={{ ...styles.th, borderTopRightRadius: '16px' }}>Aksi</th>
+                <th style={{ ...styles.th, ...actionCell, borderTopRightRadius: '16px' }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -128,10 +154,27 @@ function PelamarTab({
                         <span style={badge('neutral')}>{new Date(app.applied_at).toLocaleDateString('id-ID')}</span>
                       </td>
                       <td style={styles.td}>{renderStatus(app.status)}</td>
-                      <td style={styles.td}>
-                        <button className="btn-hover" onClick={() => setSelectedApplication({ app, student, vacancy })} style={compactButton(styles, 'primary')}>
-                          <Eye size={14} /> Cek CV & Pesan
-                        </button>
+                      <td style={{ ...styles.td, ...actionCell }}>
+                        <div style={actionButtonGroup(isMobile)}>
+                          <button
+                            className="btn-hover"
+                            onClick={() => setSelectedApplication({ app, student, vacancy })}
+                            style={actionIconButton('primary')}
+                            title="Cek CV dan pesan"
+                            aria-label={`Cek CV dan pesan ${student.first_name || student.email || 'pelamar'}`}
+                          >
+                            <Eye size={15} />
+                          </button>
+                          <button
+                            className="btn-hover"
+                            onClick={() => handleArchiveApplication(app)}
+                            style={actionIconButton('danger')}
+                            title="Arsipkan pelamar"
+                            aria-label={`Arsipkan lamaran ${student.first_name || student.email || 'pelamar'}`}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -175,9 +218,17 @@ function PelamarTab({
                       <div style={{ color: '#64748b', fontSize: '11px', fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{vacancy.title} - {new Date(app.applied_at).toLocaleDateString('id-ID')}</div>
                     </div>
                   </div>
-                  <button className="btn-hover" onClick={() => setSelectedApplication({ app, student, vacancy })} style={compactButton(styles, 'neutral', { padding: '8px 10px', flexShrink: 0 })}>
-                    Review
-                  </button>
+                  <div style={actionButtonGroup(isMobile, { flexShrink: 0 })}>
+                    <button
+                      className="btn-hover"
+                      onClick={() => setSelectedApplication({ app, student, vacancy })}
+                      style={actionIconButton('neutral')}
+                      title="Review pelamar"
+                      aria-label={`Review pelamar ${student.first_name || student.email || 'mahasiswa'}`}
+                    >
+                      <Eye size={15} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

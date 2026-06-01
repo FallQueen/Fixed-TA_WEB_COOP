@@ -1,6 +1,7 @@
 import api from '../../../api/axios';
 import { API_ROUTES } from '../constants';
 import { getStudentApprovalMissingFields } from '../helpers';
+import { getFeedbackApi } from './useAdminFeedback.js';
 
 export default function useStudentActions({
   selectedUserIds,
@@ -18,7 +19,10 @@ export default function useStudentActions({
   handleLogout,
   filteredPending,
   setShowIncompleteOnly,
+  feedback,
 }) {
+  const { notify, showAlert, showConfirm, showPrompt } = getFeedbackApi(feedback);
+
   const handleToggleUserSelection = (userId) => {
     setSelectedUserIds((prev) => (
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
@@ -27,15 +31,22 @@ export default function useStudentActions({
 
   const handleBulkDeleteUsers = async () => {
     if (selectedUserIds.length === 0) return;
-    if (!window.confirm(`⚠️ PERINGATAN: Anda akan menghapus ${selectedUserIds.length} data pendaftar secara permanen.\n\nLanjutkan penghapusan massal?`)) return;
+
+    const confirmed = await showConfirm({
+      type: 'danger',
+      title: 'Hapus Pendaftar Terpilih?',
+      message: `Anda akan menghapus ${selectedUserIds.length} data pendaftar secara permanen.`,
+      confirmLabel: 'Hapus Data',
+    });
+    if (!confirmed) return;
 
     try {
       await Promise.all(selectedUserIds.map((id) => api.delete(`${API_ROUTES.users}${id}/`)));
-      alert(`Berhasil menghapus ${selectedUserIds.length} data pendaftar. ✅`);
+      notify({ type: 'success', title: 'Pendaftar Dihapus', message: `${selectedUserIds.length} data pendaftar berhasil dihapus.` });
       setSelectedUserIds([]);
       await fetchAdminData();
     } catch {
-      alert('Gagal menghapus beberapa data.');
+      notify({ type: 'danger', title: 'Gagal Menghapus', message: 'Beberapa data pendaftar tidak berhasil dihapus.' });
     }
   };
 
@@ -50,31 +61,73 @@ export default function useStudentActions({
         email: editingStudent.email,
         program_studi: editingStudent.program_studi,
       });
-      alert('Data Master Mahasiswa berhasil diperbarui! ✅');
+      notify({ type: 'success', title: 'Data Mahasiswa Diperbarui', message: 'Perubahan data master mahasiswa berhasil disimpan.' });
       setEditingStudent(null);
       await fetchAdminData();
     } catch {
-      alert('Gagal mengupdate data mahasiswa.');
+      notify({ type: 'danger', title: 'Gagal Menyimpan', message: 'Data mahasiswa belum berhasil diperbarui.' });
     }
   };
 
-  const handleForceResetPassword = async (userId) => {
-    const newPassword = window.prompt('🔑 Masukkan password sementara untuk mahasiswa ini:\n\nSyarat: Minimal 8 karakter');
-    if (!newPassword) return;
-    if (newPassword.length < 8) return alert('Batal mereset: Password terlalu pendek!');
-    if (!window.confirm(`Yakin ingin menimpa password mahasiswa ini menjadi:\n\n"${newPassword}" ?`)) return;
+  const handleDeleteStudentAccount = async (student) => {
+    const studentName = `${student.first_name || ''} ${student.last_name || ''}`.trim()
+      || student.email
+      || 'mahasiswa ini';
+    const confirmed = await showConfirm({
+      type: 'danger',
+      title: 'Hapus Akun Mahasiswa?',
+      message: (
+        `Akun ${studentName} akan dihapus permanen dari sistem.\n\n` +
+        'Data terkait akun ini juga dapat ikut terhapus. Lanjutkan hanya jika akun memang salah atau tidak aktif.'
+      ),
+      confirmLabel: 'Hapus Akun',
+    });
+
+    if (!confirmed) return;
 
     try {
-      await api.patch(`${API_ROUTES.users}${userId}/`, { password: newPassword });
-      alert(`Sukses! ✅\nPassword telah diubah menjadi: ${newPassword}`);
+      await api.delete(`${API_ROUTES.users}${student.id}/`);
+      setSelectedUserIds((prev) => prev.filter((id) => id !== student.id));
+      setEditingStudent((current) => (current?.id === student.id ? null : current));
+      notify({ type: 'success', title: 'Akun Dihapus', message: `Akun ${studentName} berhasil dihapus.` });
+      await fetchAdminData();
     } catch {
-      alert('Gagal mereset password.');
+      notify({ type: 'danger', title: 'Gagal Menghapus Akun', message: 'Akun mahasiswa belum berhasil dihapus.' });
+    }
+  };
+
+  const handleForceResetPassword = async (studentOrId) => {
+    const userId = typeof studentOrId === 'object' ? studentOrId.id : studentOrId;
+    const studentName = typeof studentOrId === 'object'
+      ? (`${studentOrId.first_name || ''} ${studentOrId.last_name || ''}`.trim() || studentOrId.email || 'mahasiswa ini')
+      : 'mahasiswa ini';
+
+    const confirmed = await showConfirm({
+      type: 'warning',
+      title: 'Kirim Link Reset Password?',
+      message: `Sistem akan mengirim link reset password ke email ${studentName}. Mahasiswa akan membuat password baru sendiri melalui link tersebut.`,
+      confirmLabel: 'Kirim Link',
+    });
+    if (!confirmed) return;
+
+    try {
+      const response = await api.post(`${API_ROUTES.users}${userId}/send-password-reset/`);
+      await showAlert({
+        type: 'success',
+        title: 'Link Reset Terkirim',
+        message: response.data?.message || 'Link reset password telah dikirim ke email mahasiswa.',
+      });
+    } catch {
+      notify({ type: 'danger', title: 'Reset Password Gagal', message: 'Link reset password belum berhasil dikirim.' });
     }
   };
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
-    if (!profileForm.username) return alert('Username tidak boleh kosong!');
+    if (!profileForm.username) {
+      notify({ type: 'warning', title: 'Username Kosong', message: 'Username tidak boleh kosong.' });
+      return;
+    }
 
     setIsUpdatingProfile(true);
     try {
@@ -84,10 +137,10 @@ export default function useStudentActions({
         last_name: profileForm.last_name,
       });
 
-      alert('ID Login & Profil berhasil diperbarui! ✅');
+      notify({ type: 'success', title: 'Profil Admin Diperbarui', message: 'ID login dan profil admin berhasil disimpan.' });
       await fetchAdminData();
     } catch {
-      alert('Gagal memperbarui username.');
+      notify({ type: 'danger', title: 'Gagal Memperbarui Profil', message: 'Username atau profil admin belum berhasil diperbarui.' });
     } finally {
       setIsUpdatingProfile(false);
     }
@@ -99,8 +152,14 @@ export default function useStudentActions({
 
   const handleAdminPasswordChange = async (e) => {
     e.preventDefault();
-    if (passwordForm.new_password !== passwordForm.confirm_password) return alert('Batal! Konfirmasi password tidak sama.');
-    if (passwordForm.new_password.length < 8) return alert('Password minimal 8 karakter.');
+    if (passwordForm.new_password !== passwordForm.confirm_password) {
+      notify({ type: 'warning', title: 'Konfirmasi Tidak Sama', message: 'Konfirmasi password baru belum cocok.' });
+      return;
+    }
+    if (passwordForm.new_password.length < 8) {
+      notify({ type: 'warning', title: 'Password Terlalu Pendek', message: 'Password minimal 8 karakter.' });
+      return;
+    }
 
     setIsChangingPassword(true);
     try {
@@ -109,10 +168,10 @@ export default function useStudentActions({
         new_password: passwordForm.new_password,
       });
 
-      alert('Sandi berhasil diperbarui! ✅\nSilakan login kembali.');
+      await showAlert({ type: 'success', title: 'Sandi Berhasil Diperbarui', message: 'Silakan login kembali dengan sandi baru.' });
       handleLogout();
     } catch {
-      alert('Gagal mengubah password.');
+      notify({ type: 'danger', title: 'Gagal Mengubah Sandi', message: 'Sandi admin belum berhasil diperbarui.' });
     } finally {
       setIsChangingPassword(false);
     }
@@ -126,18 +185,64 @@ export default function useStudentActions({
     const missing = getStudentApprovalMissingFields(user);
 
     if (missing.length > 0) {
-      const confirmMsg = `⚠️ PERINGATAN!\n\nData pendaftar atas nama ${user.first_name} BELUM LENGKAP:\n${missing.join('\n')}\n\nApakah Anda yakin ingin MEMAKSAKAN persetujuan akun ini?`;
-      if (!window.confirm(confirmMsg)) return;
-    } else if (!window.confirm(`Setujui akun ${user.first_name} agar bisa login ke sistem?`)) {
-      return;
+      const confirmed = await showConfirm({
+        type: 'warning',
+        title: 'Data Pendaftar Belum Lengkap',
+        message: `Data pendaftar atas nama ${user.first_name} belum lengkap. Tetap setujui akun ini?`,
+        details: missing,
+        confirmLabel: 'Tetap Setujui',
+      });
+      if (!confirmed) return;
+    } else {
+      const confirmed = await showConfirm({
+        type: 'confirm',
+        title: 'Setujui Akun Mahasiswa?',
+        message: `Setujui akun ${user.first_name} agar bisa login ke sistem?`,
+        confirmLabel: 'Setujui Akun',
+      });
+      if (!confirmed) return;
     }
 
     try {
       await api.patch(`${API_ROUTES.users}${user.id}/`, { is_active: true });
-      alert('Akun Mahasiswa Berhasil Disetujui! ✅');
+      notify({ type: 'success', title: 'Akun Disetujui', message: 'Akun mahasiswa berhasil diaktifkan.' });
       await fetchAdminData();
     } catch {
-      alert('Gagal menyetujui akun.');
+      notify({ type: 'danger', title: 'Gagal Menyetujui Akun', message: 'Akun mahasiswa belum berhasil diaktifkan.' });
+    }
+  };
+
+  const handleRejectStudent = async (user) => {
+    const studentName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email || 'mahasiswa ini';
+    const rejectionReason = await showPrompt({
+      type: 'danger',
+      title: 'Tolak Pendaftaran?',
+      message: (
+        `Tolak pendaftaran akun ${studentName}?\n\n` +
+        'Tuliskan alasan yang jelas. Status akun akan berubah menjadi Ditolak dan mahasiswa dapat daftar ulang menggunakan email yang sama.'
+      ),
+      inputLabel: 'Alasan Penolakan',
+      placeholder: 'Contoh: Dokumen SPTJM tidak terbaca. Silakan unggah ulang dokumen yang benar.',
+      confirmLabel: 'Tolak Pendaftaran',
+      multiline: true,
+      validate: (value) => (value.trim() ? '' : 'Alasan penolakan wajib diisi.'),
+    });
+
+    if (!rejectionReason) return;
+
+    try {
+      const response = await api.post(`${API_ROUTES.users}${user.id}/reject-registration/`, {
+        rejection_reason: rejectionReason.trim(),
+      });
+      setSelectedUserIds((prev) => prev.filter((id) => id !== user.id));
+      notify({
+        type: 'success',
+        title: 'Pendaftaran Ditolak',
+        message: response.data?.message || 'Status akun diubah menjadi Ditolak dan alasan telah dikirim ke mahasiswa.',
+      });
+      await fetchAdminData();
+    } catch {
+      notify({ type: 'danger', title: 'Gagal Menolak Pendaftaran', message: 'Status pendaftaran belum berhasil diubah.' });
     }
   };
 
@@ -148,34 +253,50 @@ export default function useStudentActions({
     const incompleteUsersCount = filteredPending.length - validUsers.length;
 
     if (validUsers.length === 0) {
-      alert(`⚠️ Peringatan!\n\nSemua ${filteredPending.length} mahasiswa dalam antrean saat ini BELUM melengkapi data master/berkas.\nSistem menolak persetujuan massal.`);
+      await showAlert({
+        type: 'warning',
+        title: 'Persetujuan Massal Ditolak',
+        message: `Semua ${filteredPending.length} mahasiswa dalam antrean saat ini belum melengkapi data master/berkas.`,
+      });
       setShowIncompleteOnly(true);
       return;
     }
 
     if (incompleteUsersCount > 0) {
-      if (!window.confirm(`⚠️ PERINGATAN!\n\nAda ${incompleteUsersCount} mahasiswa yang datanya BELUM LENGKAP. Mereka akan dilewati.\n\nKlik 'OK' jika ingin menyetujui ${validUsers.length} akun yang LENGKAP saja.`)) return;
+      const confirmed = await showConfirm({
+        type: 'warning',
+        title: 'Lewati Data Belum Lengkap?',
+        message: `Ada ${incompleteUsersCount} mahasiswa yang datanya belum lengkap. Mereka akan dilewati dan ${validUsers.length} akun yang lengkap akan disetujui.`,
+        confirmLabel: 'Setujui yang Lengkap',
+      });
+      if (!confirmed) return;
 
       try {
         await Promise.all(validUsers.map((user) => api.patch(`${API_ROUTES.users}${user.id}/`, { is_active: true })));
-        alert(`Berhasil! ${validUsers.length} akun disetujui. ✅\nSisa ${incompleteUsersCount} akun dibiarkan pending karena data tidak lengkap.`);
+        notify({ type: 'success', title: 'Approval Massal Selesai', message: `${validUsers.length} akun disetujui. ${incompleteUsersCount} akun tetap pending karena data belum lengkap.` });
         await fetchAdminData();
         setShowIncompleteOnly(true);
       } catch {
-        alert('Terjadi kesalahan saat memproses.');
+        notify({ type: 'danger', title: 'Approval Massal Gagal', message: 'Terjadi kesalahan saat memproses approval massal.' });
       }
       return;
     }
 
-    if (!window.confirm(`Yakin ingin menyetujui SEMUA (${validUsers.length}) akun mahasiswa baru?`)) return;
+    const confirmed = await showConfirm({
+      type: 'confirm',
+      title: 'Setujui Semua Akun?',
+      message: `${validUsers.length} akun mahasiswa baru akan disetujui.`,
+      confirmLabel: 'Setujui Semua',
+    });
+    if (!confirmed) return;
 
     try {
       await Promise.all(validUsers.map((user) => api.patch(`${API_ROUTES.users}${user.id}/`, { is_active: true })));
-      alert(`Berhasil! ${validUsers.length} akun disetujui. ✅`);
+      notify({ type: 'success', title: 'Semua Akun Disetujui', message: `${validUsers.length} akun mahasiswa berhasil diaktifkan.` });
       await fetchAdminData();
       setShowIncompleteOnly(false);
     } catch {
-      alert('Terjadi kesalahan saat memproses.');
+      notify({ type: 'danger', title: 'Approval Massal Gagal', message: 'Terjadi kesalahan saat memproses approval massal.' });
     }
   };
 
@@ -183,12 +304,14 @@ export default function useStudentActions({
     handleToggleUserSelection,
     handleBulkDeleteUsers,
     handleEditStudentSubmit,
+    handleDeleteStudentAccount,
     handleForceResetPassword,
     handleUpdateProfile,
     handleProfileFormChange,
     handleAdminPasswordChange,
     handlePasswordFormChange,
     handleApproveStudent,
+    handleRejectStudent,
     handleApproveAllStudents,
   };
 }

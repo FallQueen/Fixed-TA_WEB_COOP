@@ -1,5 +1,8 @@
-import { Activity, Building2, CheckCircle, Download, Edit2, Key, Mail, Users, History } from 'lucide-react';
+import { Activity, Building2, CheckCircle, ChevronDown, Download, Edit2, FileText, History, Key, Link2, Mail, Send, Trash2, UserRound, Users, X } from 'lucide-react';
 import { stemRed } from '../../styles/adminstyles';
+import { MIN_INTERNSHIP_WORKING_DAYS, calculateWorkingDays } from '../constants';
+import { CERTIFICATE_GRADE_OPTIONS } from './constants';
+import { getPlacementHistoryForStudent } from './helpers';
 
 const reportSections = [
   { key: 'company_profile', label: 'Profil Perusahaan' },
@@ -53,6 +56,7 @@ function DashboardModals({
   selectedApplication,
   setSelectedApplication,
   handleUpdateAppStatus,
+  handleArchiveApplication,
   placementToApprove,
   setPlacementToApprove,
   confirmApprovePlacement,
@@ -74,12 +78,44 @@ function DashboardModals({
   // [TAMBAHAN BARU]: Logika memisahkan histori magang
   let historyPlacements = [];
   if (placementToApprove && placements) {
-    historyPlacements = placements.filter(
-      (p) => 
-        p.student === placementToApprove.student.id && 
-        p.id !== placementToApprove.placement.id // Singkirkan data yang sedang diapprove
+    historyPlacements = getPlacementHistoryForStudent(
+      placements,
+      placementToApprove.student.id,
+      placementToApprove.placement.id
     );
   }
+  const selectedDetailMissingFields = selectedDetail?.certificateMissingFields || [];
+  const selectedMonthlySummary = selectedDetail?.monthlyReportSummary;
+  const canIssueSelectedCertificate = selectedDetail && selectedDetailMissingFields.length === 0;
+  const isSupervisorEvaluationEmail = emailModal.actionType.includes('send_eval');
+  const getSelectedSourceText = (sourcePlacement) => {
+    if (!selectedDetail || !sourcePlacement || String(sourcePlacement.id) === String(selectedDetail.placement.id)) {
+      return '';
+    }
+
+    return `Dari histori ${sourcePlacement.company_name}`;
+  };
+  const utsSourceText = getSelectedSourceText(selectedDetail?.mhsUtsPlacement);
+  const finalSourceText = getSelectedSourceText(selectedDetail?.mhsFinalPlacement);
+  const evalUtsSourceText = getSelectedSourceText(selectedDetail?.evalUTSPlacement);
+  const evalUasSourceText = getSelectedSourceText(selectedDetail?.evalUASPlacement);
+  const placementApprovalWorkingDays = placementToApprove
+    ? calculateWorkingDays(placementToApprove.placement.start_date, placementToApprove.placement.end_date)
+    : 0;
+  const transferSourcePlacement = placementToApprove?.placement?.previous_placement_end_date
+    ? historyPlacements.find((placement) => placement.status === 'verified' && placement.is_approved)
+    : null;
+  const previousPlacementWorkingDays = transferSourcePlacement
+    ? calculateWorkingDays(
+      transferSourcePlacement.start_date,
+      placementToApprove.placement.previous_placement_end_date
+    )
+    : 0;
+  const placementApprovalTotalWorkingDays = transferSourcePlacement
+    ? previousPlacementWorkingDays + placementApprovalWorkingDays
+    : placementApprovalWorkingDays;
+  const canApprovePlacement = !placementToApprove
+    || placementApprovalTotalWorkingDays >= MIN_INTERNSHIP_WORKING_DAYS;
 
   return (
     <>
@@ -125,8 +161,8 @@ function DashboardModals({
                     <h5 style={{ margin: '0 0 4px 0', color: stemRed, fontSize: '13px' }}>Keamanan Akun</h5>
                     <p style={{ margin: 0, fontSize: '12px', color: '#991b1b' }}>Mahasiswa lupa password login?</p>
                   </div>
-                  <button type="button" onClick={() => handleForceResetPassword(editingStudent.id)} className="btn-hover" style={{ backgroundColor: 'white', color: stemRed, border: `1px solid ${stemRed}`, padding: '8px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Key size={14} /> Ganti Password
+                  <button type="button" onClick={() => handleForceResetPassword(editingStudent)} className="btn-hover" style={{ backgroundColor: 'white', color: stemRed, border: `1px solid ${stemRed}`, padding: '8px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Key size={14} /> Kirim Link Reset
                   </button>
                 </div>
               </div>
@@ -170,6 +206,19 @@ function DashboardModals({
                   <p style={{ margin: 0, fontSize: '14px', color: '#475569', lineHeight: '1.7', whiteSpace: 'pre-line' }}>
                     {selectedApplication.app.cover_letter || <span style={{ fontStyle: 'italic', color: '#94a3b8' }}>Tidak ada pesan tambahan.</span>}
                   </p>
+                  {selectedApplication.app.status === 'withdrawn' && (
+                    <div style={{ marginTop: '18px', padding: '14px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '10px' }}>
+                      <h5 style={{ margin: '0 0 6px 0', color: '#9a3412', fontSize: '13px', fontWeight: '800' }}>Alasan Ditarik Mahasiswa</h5>
+                      <p style={{ margin: 0, color: '#9a3412', fontSize: '13px', lineHeight: '1.6', whiteSpace: 'pre-line' }}>
+                        {selectedApplication.app.withdrawal_reason || 'Tidak ada alasan yang dicatat.'}
+                      </p>
+                      {selectedApplication.app.withdrawn_at && (
+                        <p style={{ margin: '8px 0 0', color: '#c2410c', fontSize: '11px', fontWeight: '700' }}>
+                          Ditarik pada {new Date(selectedApplication.app.withdrawn_at).toLocaleString('id-ID')}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
@@ -213,9 +262,19 @@ function DashboardModals({
                   <option value="reviewed">Teruskan ke HRD Perusahaan</option>
                   <option value="accepted">Diterima Perusahaan</option>
                   <option value="rejected">Ditolak Perusahaan</option>
+                  <option value="withdrawn">Ditarik Mahasiswa</option>
                 </select>
               </div>
-              <button className="btn-hover" onClick={() => setSelectedApplication(null)} style={{ ...styles.btnPrimary, backgroundColor: '#94a3b8', width: isMobile ? '100%' : 'auto' }}>Tutup Preview</button>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', width: isMobile ? '100%' : 'auto', justifyContent: isMobile ? 'stretch' : 'flex-end' }}>
+                <button
+                  className="btn-hover"
+                  onClick={() => handleArchiveApplication(selectedApplication.app)}
+                  style={{ ...styles.btnDanger, width: isMobile ? '100%' : 'auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                >
+                  <Trash2 size={14} /> Arsipkan dari Daftar
+                </button>
+                <button className="btn-hover" onClick={() => setSelectedApplication(null)} style={{ ...styles.btnPrimary, backgroundColor: '#94a3b8', width: isMobile ? '100%' : 'auto' }}>Tutup Preview</button>
+              </div>
             </div>
           </div>
         </div>
@@ -251,11 +310,34 @@ function DashboardModals({
                 <div style={{ backgroundColor: 'white', padding: '20px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
                   <h4 style={{ color: '#0f172a', borderBottom: '1px dashed #e2e8f0', paddingBottom: '10px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}><Activity size={18} /> Detail Periode & Supervisor</h4>
                   <p style={{ margin: '0 0 10px 0', fontSize: '14px' }}><span style={{ color: '#64748b' }}>Mulai s/d Selesai:</span> <br /><strong>{placementToApprove.placement.start_date} - {placementToApprove.placement.end_date}</strong></p>
+                  {placementToApprove.placement.previous_placement_end_date && (
+                    <p style={{ margin: '0 0 10px 0', fontSize: '14px' }}>
+                      <span style={{ color: '#64748b' }}>Tanggal Terakhir di Tempat Lama:</span><br />
+                      <strong>{placementToApprove.placement.previous_placement_end_date}</strong>
+                    </p>
+                  )}
+                  {placementToApprove.placement.transfer_reason && (
+                    <p style={{ margin: '0 0 10px 0', fontSize: '14px', lineHeight: '1.55' }}>
+                      <span style={{ color: '#64748b' }}>Alasan Pindah:</span><br />
+                      <strong>{placementToApprove.placement.transfer_reason}</strong>
+                    </p>
+                  )}
+                  {transferSourcePlacement && (
+                    <div style={{ margin: '12px 0', padding: '12px', backgroundColor: '#ecfdf5', border: '1px solid #bbf7d0', borderRadius: '10px', color: '#047857', fontSize: '13px', lineHeight: '1.55', fontWeight: '700' }}>
+                      Akumulasi durasi: {placementApprovalTotalWorkingDays} hari kerja ({previousPlacementWorkingDays} lama + {placementApprovalWorkingDays} baru).
+                    </div>
+                  )}
                   <p style={{ margin: '15px 0 10px 0', fontSize: '14px' }}><span style={{ color: '#64748b' }}>Nama Supervisor:</span> <br /><strong>{placementToApprove.placement.supervisor_name}</strong></p>
                   <p style={{ margin: '0 0 10px 0', fontSize: '14px' }}><span style={{ color: '#64748b' }}>Email Supervisor:</span> <br /><strong>{placementToApprove.placement.supervisor_email}</strong></p>
                   <p style={{ margin: '0 0 10px 0', fontSize: '14px' }}><span style={{ color: '#64748b' }}>WhatsApp Sup.:</span> <br /><strong>{placementToApprove.placement.supervisor_phone}</strong></p>
                 </div>
               </div>
+
+              {!canApprovePlacement && (
+                <div style={{ marginTop: '18px', padding: '14px 16px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', color: '#991b1b', fontSize: '13px', lineHeight: '1.55', fontWeight: '700' }}>
+                  Durasi magang belum memenuhi minimal {MIN_INTERNSHIP_WORKING_DAYS} hari kerja. {transferSourcePlacement ? `Akumulasi saat ini baru ${placementApprovalTotalWorkingDays} hari kerja (${previousPlacementWorkingDays} hari kerja tempat lama + ${placementApprovalWorkingDays} hari kerja tempat baru).` : `Durasi data ini baru ${placementApprovalWorkingDays} hari kerja.`} Minta mahasiswa memperbaiki tanggal mulai/selesai atau edit data penempatan terlebih dahulu.
+                </div>
+              )}
 
               {/* TOMBOL LOA */}
               <div style={{ marginTop: '20px', padding: '25px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '2px dashed #cbd5e1', textAlign: 'center' }}>
@@ -314,7 +396,7 @@ function DashboardModals({
 
             <div style={styles.modalFooter}>
               <button className="btn-hover" onClick={() => setPlacementToApprove(null)} style={{ ...styles.btnPrimary, backgroundColor: '#94a3b8', width: isMobile ? '100%' : 'auto' }}>Tutup</button>
-              <button className="btn-hover" onClick={confirmApprovePlacement} style={{ ...styles.btnSuccess, fontSize: '15px', padding: '14px 25px', width: isMobile ? '100%' : 'auto' }}>
+              <button disabled={!canApprovePlacement} className="btn-hover" onClick={confirmApprovePlacement} style={{ ...styles.btnSuccess, backgroundColor: canApprovePlacement ? '#10b981' : '#94a3b8', cursor: canApprovePlacement ? 'pointer' : 'not-allowed', boxShadow: canApprovePlacement ? undefined : 'none', fontSize: '15px', padding: '14px 25px', width: isMobile ? '100%' : 'auto' }}>
                 <CheckCircle size={18} /> Verifikasi & Setujui Tempat Ini
               </button>
             </div>
@@ -513,6 +595,22 @@ function DashboardModals({
               <div style={styles.grid2Modal}>
                 <div>
                   <h4 style={{ color: stemRed, marginTop: 0, borderBottom: '2px solid #e2e8f0', paddingBottom: '10px', fontSize: '16px' }}>Histori Laporan Bulanan</h4>
+                  {selectedMonthlySummary && (
+                    <div style={{ margin: '0 0 15px 0', padding: '12px 14px', borderRadius: '8px', border: `1px solid ${selectedMonthlySummary.isComplete ? '#bbf7d0' : '#fecaca'}`, backgroundColor: selectedMonthlySummary.isComplete ? '#f0fdf4' : '#fef2f2', color: selectedMonthlySummary.isComplete ? '#166534' : '#991b1b', fontSize: '13px', fontWeight: '700', lineHeight: '1.5' }}>
+                      <div>
+                        Laporan terkumpul: {selectedMonthlySummary.submittedCount}/{selectedMonthlySummary.requiredCount || '-'} sesuai total durasi magang{selectedMonthlySummary.placementSummaries?.length > 1 ? ' termasuk riwayat pindah perusahaan' : ''}.
+                      </div>
+                      {selectedMonthlySummary.placementSummaries?.length > 1 && (
+                        <div style={{ marginTop: '8px', display: 'grid', gap: '4px', fontSize: '12px', fontWeight: '600' }}>
+                          {selectedMonthlySummary.placementSummaries.map((summary) => (
+                            <span key={summary.placement.id}>
+                              {summary.placement.company_name}: {summary.submittedCount}/{summary.requiredCount || '-'} laporan{summary.usesTransferEndDate ? ` (dihitung s/d ${summary.periodEndDate})` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {selectedDetail.mhsMonthly.length === 0 ? (
                     <div style={{ padding: '20px', backgroundColor: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px' }}>
                       <p style={{ color: '#b45309', fontSize: '14px', margin: 0, fontWeight: '600' }}>Belum ada laporan bulanan.</p>
@@ -545,6 +643,7 @@ function DashboardModals({
                         <span style={{ color: '#1d4ed8', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <CheckCircle size={16} /> Berkas Tersedia
                         </span>
+                        {utsSourceText && <span style={{ fontSize: '12px', color: '#475569', fontWeight: '700' }}>{utsSourceText}</span>}
                         <a className="btn-hover" href={selectedDetail.mhsUts.report_file} target="_blank" rel="noreferrer" style={{ ...styles.linkDoc, backgroundColor: 'white', borderColor: '#93c5fd', color: '#1d4ed8' }}><Download size={12} /> Unduh PDF</a>
                       </div>
                       {selectedDetail.mhsUts.description && (
@@ -568,6 +667,7 @@ function DashboardModals({
                   {selectedDetail.mhsFinal ? (
                     <div style={{ backgroundColor: '#f0fdf4', padding: '20px', borderRadius: '8px', border: '1px solid #bbf7d0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ color: '#166534', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle size={16} /> Berkas Tersedia</span>
+                      {finalSourceText && <span style={{ fontSize: '12px', color: '#475569', fontWeight: '700' }}>{finalSourceText}</span>}
                       <a className="btn-hover" href={selectedDetail.mhsFinal.report_file} target="_blank" rel="noreferrer" style={{ ...styles.linkDoc, backgroundColor: 'white', borderColor: '#86efac', color: '#166534' }}><Download size={12} /> Unduh PDF</a>
                     </div>
                   ) : (
@@ -582,11 +682,11 @@ function DashboardModals({
                   <div style={{ backgroundColor: 'white', padding: '25px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px dashed #cbd5e1' }}>
                       <strong style={{ color: '#334155', fontSize: '15px' }}>Nilai UTS:</strong>
-                      {selectedDetail.evalUTS?.is_filled ? <span style={{ ...styles.badgeSuccess, fontSize: '14px', padding: '6px 15px' }}>{selectedDetail.evalUTS.score}</span> : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Menunggu</span>}
+                      {selectedDetail.evalUTS?.is_filled ? <span style={{ ...styles.badgeSuccess, fontSize: '14px', padding: '6px 15px' }}>{selectedDetail.evalUTS.score}{evalUtsSourceText ? ` - ${evalUtsSourceText}` : ''}</span> : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Menunggu</span>}
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <strong style={{ color: '#334155', fontSize: '15px' }}>Nilai UAS:</strong>
-                      {selectedDetail.evalUAS?.is_filled ? <span style={{ ...styles.badgeSuccess, fontSize: '14px', padding: '6px 15px' }}>{selectedDetail.evalUAS.score}</span> : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Menunggu</span>}
+                      {selectedDetail.evalUAS?.is_filled ? <span style={{ ...styles.badgeSuccess, fontSize: '14px', padding: '6px 15px' }}>{selectedDetail.evalUAS.score}{evalUasSourceText ? ` - ${evalUasSourceText}` : ''}</span> : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Menunggu</span>}
                     </div>
                   </div>
                 </div>
@@ -600,10 +700,34 @@ function DashboardModals({
                   </div>
                 ) : (
                   <div>
-                    <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>Pastikan semua syarat akademik terpenuhi sebelum menerbitkan sertifikat.</p>
-                    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'center', gap: '15px', alignItems: 'center' }}>
-                      <input className="input-focus" type="text" placeholder="Masukkan Grade (Contoh: A, A-, B+)" style={{ padding: '14px 20px', borderRadius: '8px', border: '1px solid #cbd5e1', width: isMobile ? '100%' : '300px', fontSize: '15px', textAlign: 'center', fontWeight: 'bold' }} value={gradeInput[selectedDetail.placement.id] || ''} onChange={(e) => setGradeInput({ ...gradeInput, [selectedDetail.placement.id]: e.target.value })} />
-                      <button className="btn-hover" onClick={() => handleIssueCertificate(selectedDetail.student.id, selectedDetail.placement.id)} style={{ padding: '14px 25px', backgroundColor: stemRed, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', width: isMobile ? '100%' : 'auto', fontSize: '15px' }}>Terbitkan Sertifikat Sekarang</button>
+                    {selectedDetailMissingFields.length > 0 ? (
+                      <div style={{ marginBottom: '20px', padding: '16px', borderRadius: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', textAlign: 'left' }}>
+                        <strong style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>Sertifikat belum bisa diterbitkan karena data berikut belum lengkap:</strong>
+                        <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', lineHeight: '1.6' }}>
+                          {selectedDetailMissingFields.map((field) => (
+                            <li key={field}>{field.replace(/^- /, '')}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : (
+                      <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>Semua syarat akademik sudah lengkap. Pilih nilai akhir untuk menerbitkan sertifikat.</p>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'center', gap: '15px', alignItems: isMobile ? 'stretch' : 'flex-end' }}>
+                      <div style={{ width: isMobile ? '100%' : '300px', textAlign: 'left' }}>
+                        <label style={{ display: 'block', color: '#334155', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '7px' }}>Grade Sertifikat</label>
+                        <div style={{ position: 'relative' }}>
+                          <select className="input-focus" style={{ appearance: 'none', WebkitAppearance: 'none', width: '100%', padding: '14px 44px 14px 16px', borderRadius: '12px', border: `1px solid ${canIssueSelectedCertificate ? '#fecaca' : '#cbd5e1'}`, fontSize: '16px', fontWeight: '900', letterSpacing: '0', color: gradeInput[selectedDetail.placement.id] ? stemRed : '#64748b', backgroundColor: canIssueSelectedCertificate ? '#fff7f7' : '#f8fafc', boxShadow: canIssueSelectedCertificate ? '0 10px 22px rgba(179, 19, 18, 0.08)' : 'none', outline: 'none', cursor: 'pointer', fontFamily: '"Montserrat", sans-serif' }} value={gradeInput[selectedDetail.placement.id] || ''} onChange={(e) => setGradeInput({ ...gradeInput, [selectedDetail.placement.id]: e.target.value })}>
+                            <option value="">Pilih Grade</option>
+                            {CERTIFICATE_GRADE_OPTIONS.map((grade) => (
+                              <option key={grade} value={grade}>{grade}</option>
+                            ))}
+                          </select>
+                          <div style={{ position: 'absolute', right: '13px', top: '50%', transform: 'translateY(-50%)', width: '28px', height: '28px', borderRadius: '9px', backgroundColor: canIssueSelectedCertificate ? '#fee2e2' : '#e2e8f0', color: canIssueSelectedCertificate ? stemRed : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                            <ChevronDown size={16} />
+                          </div>
+                        </div>
+                      </div>
+                      <button disabled={!canIssueSelectedCertificate} className="btn-hover" onClick={() => handleIssueCertificate(selectedDetail.student.id, selectedDetail.placement.id)} style={{ padding: '14px 25px', backgroundColor: canIssueSelectedCertificate ? stemRed : '#94a3b8', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: canIssueSelectedCertificate ? 'pointer' : 'not-allowed', width: isMobile ? '100%' : 'auto', fontSize: '15px' }}>Terbitkan Sertifikat Sekarang</button>
                     </div>
                   </div>
                 )}
@@ -615,45 +739,81 @@ function DashboardModals({
 
       {emailModal.isOpen && (
          <div style={styles.modalOverlay}>
-            {/* ... (Kode existing emailModal tidak diubah) ... */}
-            <div style={{ ...styles.modalContent, maxWidth: '600px' }}>
-            <div style={styles.modalHeader}>
-              <h2 style={{ margin: 0, color: '#0f172a', fontSize: '18px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Mail size={20} /> Tulis Pesan Email {emailModal.targetName ? `ke ${emailModal.targetName}` : '(Massal)'}
-              </h2>
-              <button onClick={() => setEmailModal({ ...emailModal, isOpen: false })} style={styles.closeBtn}>✖</button>
+            <div style={{ ...styles.modalContent, maxWidth: '680px', borderRadius: '16px', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', padding: isMobile ? '18px' : '20px 24px', backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '13px', minWidth: 0 }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff1f2', color: stemRed, border: '1px solid #fecaca', flexShrink: 0 }}>
+                  <Mail size={20} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <h2 style={{ margin: 0, color: '#0f172a', fontSize: isMobile ? '17px' : '19px', fontWeight: '900', lineHeight: 1.3 }}>
+                    {isSupervisorEvaluationEmail ? 'Preview Email Supervisor' : 'Tulis Pesan Email'}
+                  </h2>
+                  <p style={{ margin: '4px 0 0', color: '#94a3b8', fontSize: '11px', fontWeight: '700' }}>
+                    {isSupervisorEvaluationEmail ? 'Permohonan evaluasi kinerja mahasiswa' : (emailModal.targetName ? 'Pesan individual' : 'Pesan massal')}
+                  </p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setEmailModal({ ...emailModal, isOpen: false })} aria-label="Tutup preview email" style={{ width: '34px', height: '34px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '9px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', color: '#64748b', cursor: 'pointer', flexShrink: 0 }}>
+                <X size={17} />
+              </button>
             </div>
 
             <form onSubmit={handleSendCustomEmail}>
-              <div style={{ padding: '25px', backgroundColor: '#f8fafc' }}>
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ ...styles.labelStyle, color: '#475569' }}>Subjek Email</label>
+              <div style={{ padding: isMobile ? '18px' : '22px 24px', backgroundColor: '#f8fafc' }}>
+                <div style={{ marginBottom: '16px', padding: '13px 14px', borderRadius: '11px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#eef2ff', color: '#4f46e5', flexShrink: 0 }}>
+                    <UserRound size={17} />
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <span style={{ display: 'block', color: '#94a3b8', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '3px' }}>Kepada</span>
+                    <strong style={{ display: 'block', color: '#0f172a', fontSize: '13px', lineHeight: 1.4 }}>{emailModal.targetName || 'Penerima sesuai filter'}</strong>
+                    {emailModal.targetEmail && (
+                      <span style={{ display: 'block', marginTop: '2px', color: '#64748b', fontSize: '12px', fontWeight: '700', overflowWrap: 'anywhere' }}>{emailModal.targetEmail}</span>
+                    )}
+                  </div>
+                  <span style={{ padding: '5px 8px', borderRadius: '999px', backgroundColor: isSupervisorEvaluationEmail ? '#ecfdf5' : '#eef2ff', color: isSupervisorEvaluationEmail ? '#047857' : '#4338ca', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                    {isSupervisorEvaluationEmail ? 'Supervisor' : (emailModal.targetName ? 'Individual' : 'Massal')}
+                  </span>
+                </div>
+                {isSupervisorEvaluationEmail && (
+                  <div style={{ marginBottom: '17px', padding: '11px 13px', borderRadius: '10px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', display: 'flex', alignItems: 'center', gap: '9px', fontSize: '11px', fontWeight: '800', lineHeight: 1.5 }}>
+                    <Link2 size={15} style={{ flexShrink: 0 }} />
+                    Link form evaluasi akan ditambahkan otomatis saat email dikirim.
+                  </div>
+                )}
+                <div style={{ marginBottom: '17px' }}>
+                  <label style={{ ...styles.labelStyle, color: '#475569', display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '7px' }}>
+                    <FileText size={14} /> Subjek Email
+                  </label>
                   <input
                     type="text"
                     required
                     value={emailModal.subject}
                     onChange={(e) => setEmailModal({ ...emailModal, subject: e.target.value })}
                     className="input-focus"
-                    style={{ ...styles.modernInput, border: '1px solid #cbd5e1', fontWeight: 'bold' }}
+                    style={{ ...styles.modernInput, border: '1px solid #cbd5e1', backgroundColor: '#ffffff', fontWeight: '800' }}
                   />
                 </div>
                 <div>
-                  <label style={{ ...styles.labelStyle, color: '#475569' }}>Isi Pesan (Bisa diedit manual)</label>
+                  <label style={{ ...styles.labelStyle, color: '#475569', display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '7px' }}>
+                    <Mail size={14} /> Isi Pesan
+                  </label>
                   <textarea
                     required
-                    rows="10"
+                    rows="11"
                     value={emailModal.message}
                     onChange={(e) => setEmailModal({ ...emailModal, message: e.target.value })}
                     className="input-focus"
-                    style={{ ...styles.modernInput, resize: 'vertical', border: '1px solid #cbd5e1', lineHeight: '1.6' }}
+                    style={{ ...styles.modernInput, resize: 'vertical', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', lineHeight: '1.65', minHeight: '210px' }}
                   />
                 </div>
               </div>
 
-              <div style={{ ...styles.modalFooter, backgroundColor: 'white', borderTop: '1px solid #e2e8f0' }}>
-                <button type="button" className="btn-hover" onClick={() => setEmailModal({ ...emailModal, isOpen: false })} style={{ ...styles.btnPrimary, backgroundColor: '#94a3b8', padding: '12px 20px', width: isMobile ? '100%' : 'auto' }}>Batal</button>
-                <button type="submit" disabled={sendingEmail} className="btn-hover" style={{ ...styles.btnPrimary, backgroundColor: '#10b981', padding: '12px 25px', fontSize: '15px', width: isMobile ? '100%' : 'auto' }}>
-                  {sendingEmail ? 'Memproses...' : 'Kirim Sekarang'}
+              <div style={{ ...styles.modalFooter, backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0', gap: '10px' }}>
+                <button type="button" className="btn-hover" onClick={() => setEmailModal({ ...emailModal, isOpen: false })} style={{ padding: '12px 18px', borderRadius: '9px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', color: '#475569', fontSize: '13px', fontWeight: '900', cursor: 'pointer', width: isMobile ? '100%' : 'auto' }}>Batal</button>
+                <button type="submit" disabled={sendingEmail} className="btn-hover" style={{ ...styles.btnPrimary, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', backgroundColor: '#10b981', padding: '12px 20px', borderRadius: '9px', fontSize: '13px', width: isMobile ? '100%' : 'auto', opacity: sendingEmail ? 0.7 : 1 }}>
+                  <Send size={15} /> {sendingEmail ? 'Mengirim...' : 'Kirim Email'}
                 </button>
               </div>
             </form>

@@ -14,7 +14,9 @@ import {
   getPlacementOptionLabel,
 } from './helpers';
 
-export default function StudentDashboardTabContent({ actions, data, viewState }) {
+const GRADUATED_STUDENT_TABS = ['profil', 'notifikasi', 'sertifikat', 'pengaturan'];
+
+export default function StudentDashboardTabContent({ actions, data, viewState, feedback }) {
   const {
     acceptanceLetter,
     certificates,
@@ -23,6 +25,7 @@ export default function StudentDashboardTabContent({ actions, data, viewState })
     files,
     finalReportData,
     finalReportFile,
+    isGraduated,
     isUpdatingProfile,
     loadingCertificates,
     loadingNotifications,
@@ -31,6 +34,7 @@ export default function StudentDashboardTabContent({ actions, data, viewState })
     notifications,
     passwordForm,
     placementForm,
+    placements,
     profileForm,
     reportForm,
     setAcceptanceLetter,
@@ -41,6 +45,7 @@ export default function StudentDashboardTabContent({ actions, data, viewState })
     setUtsReportData,
     setUtsReportFile,
     setWeeklyForm,
+    studentApplications,
     submittedFinal,
     submittedUts,
     submittingFinal,
@@ -70,12 +75,14 @@ export default function StudentDashboardTabContent({ actions, data, viewState })
     handleOpenNotification,
     handlePasswordChange,
     handlePlacementSubmit,
+    handleRequestSupervisorChange,
     handleProfileFormChange,
     handleReportChange,
     handleReportSubmit,
     handleUpdateProfile,
     handleUpload,
     handleUtsReportSubmit,
+    handleWithdrawApplication,
     handleWeeklySubmit,
   } = actions;
   const {
@@ -89,6 +96,7 @@ export default function StudentDashboardTabContent({ actions, data, viewState })
     isMobile,
     isUasTriggered,
     isUtsTriggered,
+    handleTabChange,
     setPreviewDoc,
     setSelectedVacancy,
     styles,
@@ -97,6 +105,10 @@ export default function StudentDashboardTabContent({ actions, data, viewState })
     utsEvaluation,
     utsReminderLink,
   } = viewState;
+
+  if (isGraduated && !GRADUATED_STUDENT_TABS.includes(activeTab)) {
+    return null;
+  }
 
   if (activeTab === 'profil') {
     return (
@@ -152,8 +164,10 @@ export default function StudentDashboardTabContent({ actions, data, viewState })
       <VacanciesTab
         hasAnyPlacement={hasAnyPlacement}
         loadingVacancies={loadingVacancies}
+        handleWithdrawApplication={handleWithdrawApplication}
         setSelectedVacancy={setSelectedVacancy}
         styles={styles}
+        studentApplications={studentApplications}
         vacancies={vacancies}
       />
     );
@@ -165,13 +179,18 @@ export default function StudentDashboardTabContent({ actions, data, viewState })
         acceptanceLetter={acceptanceLetter}
         currentPlacement={currentPlacement}
         handlePlacementSubmit={handlePlacementSubmit}
+        handleRequestSupervisorChange={handleRequestSupervisorChange}
         hasApprovedPlacement={hasApprovedPlacement}
         hasPendingPlacement={hasPendingPlacement}
         placementForm={placementForm}
         setAcceptanceLetter={setAcceptanceLetter}
         setPlacementForm={setPlacementForm}
         styles={styles}
+        studentApplications={studentApplications}
         submittingPlacement={submittingPlacement}
+        vacancies={vacancies}
+        onOpenVacanciesTab={() => handleTabChange('lowongan')}
+        feedback={feedback}
       />
     );
   }
@@ -298,12 +317,13 @@ export default function StudentDashboardTabContent({ actions, data, viewState })
     );
   }
 
-  if (activeTab === 'sertifikat' && hasApprovedPlacement) {
+  if (activeTab === 'sertifikat' && (hasApprovedPlacement || isGraduated)) {
     return (
       <CertificatesTab
         certificates={certificates}
         isMobile={isMobile}
         loadingCertificates={loadingCertificates}
+        placements={placements}
         styles={styles}
       />
     );

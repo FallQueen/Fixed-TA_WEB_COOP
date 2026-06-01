@@ -1,10 +1,17 @@
 import { getMergedProgramStudiOptions } from '../../constants/programStudi';
+import { getMinimumInternshipEndDate } from '../constants';
 
 export const getPlacementId = (item) => item?.placement?.id || item?.placement;
 
-export const getStudentRefId = (studentRef) => (
-  studentRef && typeof studentRef === 'object' ? studentRef.id : studentRef
-);
+const getEntityId = (ref) => (ref && typeof ref === 'object' ? ref.id : ref);
+
+export const getStudentRefId = (studentRef) => getEntityId(studentRef);
+
+const getPlacementStudentKey = (placement) => {
+  const studentId = getStudentRefId(placement?.student);
+
+  return studentId === undefined || studentId === null ? null : String(studentId);
+};
 
 export const isSameStudent = (studentRef, studentId) => {
   const normalizedStudentRef = getStudentRefId(studentRef);
@@ -17,7 +24,34 @@ export const isSameStudent = (studentRef, studentId) => {
 export const isPendingPlacementApproval = (placement) => (
   placement
   && !placement.is_approved
-  && !['rejected', 'resigned', 'finished'].includes(placement.status)
+  && !['rejected', 'resigned', 'finished', 'completed'].includes(placement.status)
+);
+
+const hasActiveOrCompletedPlacement = (studentId, placements) => (
+  placements.some((placement) => (
+    isSameStudent(placement.student, studentId)
+    && (placement.is_approved || ['verified', 'completed', 'finished'].includes(placement.status))
+  ))
+);
+
+const hasIssuedCertificate = (studentId, certificates, placements) => (
+  certificates.some((certificate) => {
+    const certificateStudentId = getStudentRefId(certificate.student);
+
+    if (certificateStudentId !== undefined && certificateStudentId !== null) {
+      return String(certificateStudentId) === String(studentId);
+    }
+
+    const placementId = getPlacementId(certificate);
+    const certificatePlacement = placements.find((placement) => String(placement.id) === String(placementId));
+
+    return certificatePlacement && isSameStudent(certificatePlacement.student, studentId);
+  })
+);
+
+export const isStudentInterningOrGraduated = (studentId, placements, certificates) => (
+  hasActiveOrCompletedPlacement(studentId, placements)
+  || hasIssuedCertificate(studentId, certificates, placements)
 );
 
 const getPlacementTimestamp = (placement) => {
@@ -26,28 +60,177 @@ const getPlacementTimestamp = (placement) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
+const normalizeCompanyName = (companyName) => (
+  String(companyName || '').trim().replace(/\s+/g, ' ').toLowerCase()
+);
+
+const getCurrentPlacementPriority = (placement) => {
+  if (isPendingPlacementApproval(placement)) return 4;
+  if (placement?.is_approved || placement?.status === 'verified') return 3;
+  if (['completed', 'finished'].includes(placement?.status)) return 2;
+  if (placement?.status === 'resigned') return 1;
+  if (placement?.status === 'rejected') return 0;
+  return 1;
+};
+
+const shouldPreferPlacement = (candidate, existing, candidateIndex, existingIndex) => {
+  const candidatePriority = getCurrentPlacementPriority(candidate);
+  const existingPriority = getCurrentPlacementPriority(existing);
+
+  if (candidatePriority !== existingPriority) {
+    return candidatePriority > existingPriority;
+  }
+
+  const candidateTimestamp = getPlacementTimestamp(candidate);
+  const existingTimestamp = getPlacementTimestamp(existing);
+
+  if (candidateTimestamp !== existingTimestamp) {
+    return candidateTimestamp > existingTimestamp;
+  }
+
+  return candidateIndex < existingIndex;
+};
+
+export const getPlacementHistoryForStudent = (placements, studentId, currentPlacementId = null) => (
+  placements
+    .filter((placement) => isSameStudent(placement.student, studentId))
+    .filter((placement) => (
+      currentPlacementId === null || String(placement.id) !== String(currentPlacementId)
+    ))
+    .sort((a, b) => getPlacementTimestamp(b) - getPlacementTimestamp(a))
+);
+
+export const getPlacementPreviousCompanies = (placement) => {
+  const currentCompanyName = normalizeCompanyName(placement?.company_name);
+  const seenCompanyNames = new Set();
+  const companyNames = [];
+
+  (placement?.historyPlacements || []).forEach((historyPlacement) => {
+    const companyName = historyPlacement.company_name;
+    const normalizedCompanyName = normalizeCompanyName(companyName);
+
+    if (!normalizedCompanyName || normalizedCompanyName === currentCompanyName || seenCompanyNames.has(normalizedCompanyName)) {
+      return;
+    }
+
+    seenCompanyNames.add(normalizedCompanyName);
+    companyNames.push(companyName);
+  });
+
+  return companyNames;
+};
+
+const withPlacementHistory = (placement, placements) => {
+  const studentId = getStudentRefId(placement?.student);
+  const historyPlacements = getPlacementHistoryForStudent(placements, studentId, placement.id);
+
+  return {
+    ...placement,
+    historyPlacements,
+    previousCompanies: getPlacementPreviousCompanies({ ...placement, historyPlacements }),
+  };
+};
+
 export const getLatestPlacementsByStudent = (placements) => {
   const latestPlacements = new Map();
 
   placements.forEach((placement, index) => {
-    const existing = latestPlacements.get(placement.student);
+    const studentKey = getPlacementStudentKey(placement);
+    if (!studentKey) return;
+
+    const existing = latestPlacements.get(studentKey);
 
     if (!existing) {
-      latestPlacements.set(placement.student, { placement, index });
+      latestPlacements.set(studentKey, { placement, index });
       return;
     }
 
-    const currentTimestamp = getPlacementTimestamp(placement);
-    const existingTimestamp = getPlacementTimestamp(existing.placement);
-
-    if (currentTimestamp > existingTimestamp || (currentTimestamp === existingTimestamp && index < existing.index)) {
-      latestPlacements.set(placement.student, { placement, index });
+    if (shouldPreferPlacement(placement, existing.placement, index, existing.index)) {
+      latestPlacements.set(studentKey, { placement, index });
     }
   });
 
   return [...latestPlacements.values()]
     .sort((a, b) => a.index - b.index)
-    .map((item) => item.placement);
+    .map((item) => withPlacementHistory(item.placement, placements));
+};
+
+export const getLatestPlacementForStudent = (placements, studentId) => (
+  getLatestPlacementsByStudent(placements).find((placement) => isSameStudent(placement.student, studentId))
+);
+
+const getPlacementSearchValues = (placement) => [
+  placement?.company_name,
+  placement?.supervisor_name,
+  ...getPlacementPreviousCompanies(placement),
+];
+
+export const getPendingPlacementApprovals = (placements) => (
+  getLatestPlacementsByStudent(placements).filter(isPendingPlacementApproval)
+);
+
+export const getCertificateForPlacement = (certificates, placement) => (
+  certificates.find((certificate) => String(getPlacementId(certificate)) === String(placement?.id))
+);
+
+const getRecordTimestamp = (record) => {
+  const rawValue = record?.updated_at || record?.submitted_at || record?.created_at || record?.issued_date;
+  const parsed = rawValue ? new Date(rawValue).getTime() : 0;
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const findLatestRecordForPlacementIds = (records, placementIds, preferredPlacementId = null) => {
+  const normalizedPlacementIds = placementIds.map(String);
+  const matchingRecords = records
+    .filter((record) => normalizedPlacementIds.includes(String(getPlacementId(record))))
+    .sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
+
+  if (preferredPlacementId !== null && preferredPlacementId !== undefined) {
+    const preferredRecord = matchingRecords.find((record) => String(getPlacementId(record)) === String(preferredPlacementId));
+    if (preferredRecord) return preferredRecord;
+  }
+
+  return matchingRecords[0];
+};
+
+const findBestEvaluationForPlacementIds = (evaluations, placementIds, evalType, preferredPlacementId = null) => {
+  const normalizedPlacementIds = placementIds.map(String);
+  const matchingEvaluations = evaluations
+    .filter((evaluation) => (
+      normalizedPlacementIds.includes(String(getPlacementId(evaluation)))
+      && evaluation.eval_type === evalType
+    ))
+    .sort((a, b) => {
+      if (Boolean(a.is_filled) !== Boolean(b.is_filled)) {
+        return Boolean(b.is_filled) - Boolean(a.is_filled);
+      }
+
+      const aIsPreferred = preferredPlacementId !== null
+        && preferredPlacementId !== undefined
+        && String(getPlacementId(a)) === String(preferredPlacementId);
+      const bIsPreferred = preferredPlacementId !== null
+        && preferredPlacementId !== undefined
+        && String(getPlacementId(b)) === String(preferredPlacementId);
+
+      if (aIsPreferred !== bIsPreferred) {
+        return Number(bIsPreferred) - Number(aIsPreferred);
+      }
+
+      return getRecordTimestamp(b) - getRecordTimestamp(a);
+    });
+
+  return matchingEvaluations[0];
+};
+
+export const getEvaluationPairForPlacement = (evaluations, placement) => ({
+  evalUTS: findBestEvaluationForPlacementIds(evaluations, [placement?.id], 'UTS', placement?.id),
+  evalUAS: findBestEvaluationForPlacementIds(evaluations, [placement?.id], 'UAS', placement?.id),
+});
+
+export const isPlacementEvaluationComplete = (evaluations, placement) => {
+  const { evalUTS, evalUAS } = getEvaluationPairForPlacement(evaluations, placement);
+
+  return Boolean(evalUTS?.is_filled && evalUAS?.is_filled);
 };
 
 export const isMissingFile = (file) => !file || String(file).trim() === '' || String(file).includes('null');
@@ -71,6 +254,7 @@ export const buildApprovalFormData = () => {
 
 export const buildPlacementFromApplicationData = (studentId, vacancy) => {
   const today = new Date().toISOString().split('T')[0];
+  const minimumEndDate = getMinimumInternshipEndDate(today);
   const formData = new FormData();
 
   formData.append('student', studentId);
@@ -79,7 +263,7 @@ export const buildPlacementFromApplicationData = (studentId, vacancy) => {
   formData.append('business_sector', 'Bursa Magang Kampus');
   formData.append('company_address', 'Alamat mengikuti perusahaan');
   formData.append('start_date', today);
-  formData.append('end_date', today);
+  formData.append('end_date', minimumEndDate);
   formData.append('supervisor_name', 'Belum Diisi');
   formData.append('supervisor_email', 'admin@coop.com');
   formData.append('supervisor_phone', '-');
@@ -134,6 +318,22 @@ export const filterUsersByProdi = (users, filterProdi) => (
   users.filter((user) => (filterProdi ? user.program_studi === filterProdi : true))
 );
 
+const getUserSortTimestamp = (user) => {
+  const rawValue = user?.date_joined || user?.created_at;
+  const parsed = rawValue ? new Date(rawValue).getTime() : 0;
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const sortUsersNewestFirst = (users) => (
+  [...users].sort((a, b) => {
+    const idDiff = (Number(b?.id) || 0) - (Number(a?.id) || 0);
+    if (idDiff !== 0) return idDiff;
+    const timestampDiff = getUserSortTimestamp(b) - getUserSortTimestamp(a);
+    if (timestampDiff !== 0) return timestampDiff;
+    return 0;
+  })
+);
+
 const matchesSearchQuery = (lowerQuery, ...values) => {
   if (!lowerQuery) return true;
 
@@ -147,60 +347,73 @@ const matchesSearchQuery = (lowerQuery, ...values) => {
 const matchesStudentProdi = (studentId, students, filterProdi) => {
   if (!filterProdi) return true;
 
-  const student = students.find((item) => item.id === studentId);
+  const student = students.find((item) => isSameStudent(studentId, item.id));
   return student?.program_studi === filterProdi;
 };
 
-export const getOverviewStudentsFiltered = (students, placements, filterStatusMagang, lowerQuery) => (
-  students.filter((student) => {
-    const studentPlacement = placements.find((placement) => placement.student === student.id);
-    if (!matchesSearchQuery(lowerQuery, student.first_name, student.last_name, student.nim, student.program_studi, studentPlacement?.company_name)) return false;
+export const getOverviewStudentsFiltered = (students, placements, filterStatusMagang, lowerQuery) => {
+  const latestPlacements = getLatestPlacementsByStudent(placements);
+
+  return sortUsersNewestFirst(students.filter((student) => {
+    const studentPlacement = latestPlacements.find((placement) => isSameStudent(placement.student, student.id));
+    if (!matchesSearchQuery(lowerQuery, student.first_name, student.last_name, student.nim, student.program_studi, ...getPlacementSearchValues(studentPlacement))) return false;
     if (!filterStatusMagang) return true;
 
-    if (filterStatusMagang === 'menunggu') return studentPlacement && !studentPlacement.is_approved;
+    if (filterStatusMagang === 'menunggu') return isPendingPlacementApproval(studentPlacement);
     if (filterStatusMagang === 'terverifikasi') return studentPlacement && studentPlacement.is_approved;
     if (filterStatusMagang === 'belum_input') return !studentPlacement;
+    if (filterStatusMagang === 'ditolak') return studentPlacement?.status === 'rejected';
     return true;
-  })
+  }));
+};
+
+export const getRegistrationStatus = (user) => (
+  user?.registration_status || (user?.is_active ? 'approved' : 'pending')
 );
 
 export const getApprovalDataFiltered = (filteredPending, filteredActive, filterStatusAkun) => (
-  [...filteredPending, ...filteredActive].filter((user) => {
-    if (!filterStatusAkun) return !user.is_active;
-    if (filterStatusAkun === 'pending') return !user.is_active;
+  sortUsersNewestFirst([...filteredPending, ...filteredActive].filter((user) => {
+    const registrationStatus = getRegistrationStatus(user);
+
+    if (!filterStatusAkun) return !user.is_active && registrationStatus !== 'rejected';
+    if (filterStatusAkun === 'pending') return !user.is_active && registrationStatus !== 'rejected';
     if (filterStatusAkun === 'aktif') return user.is_active;
+    if (filterStatusAkun === 'ditolak') return registrationStatus === 'rejected';
     if (filterStatusAkun === 'semua') return true;
     return true;
-  })
+  }))
 );
 
-export const getApplicationsFiltered = (applications, students, vacancies, filterStatusPelamar, filterProdi, lowerQuery) => (
+export const getApplicationsFiltered = (applications, students, vacancies, placements, certificates, filterStatusPelamar, filterProdi, lowerQuery) => (
   applications.filter((application) => {
     const studentId = application.student?.id || application.student;
     const vacancyId = application.vacancy?.id || application.vacancy;
     const student = application.student?.id ? application.student : students.find((item) => item.id === studentId);
     const vacancy = application.vacancy?.id ? application.vacancy : vacancies.find((item) => item.id === vacancyId);
+    const isArchivedApplicant = isStudentInterningOrGraduated(studentId, placements, certificates);
 
     if (!matchesStudentProdi(studentId, students, filterProdi)) return false;
     if (!matchesSearchQuery(lowerQuery, student?.first_name, student?.last_name, student?.nim, student?.program_studi, vacancy?.title, vacancy?.company_name)) return false;
+    if (isArchivedApplicant) return false;
     if (!filterStatusPelamar) return true;
     if (filterStatusPelamar === 'review') return application.status === 'pending';
+    if (filterStatusPelamar === 'diteruskan') return application.status === 'reviewed';
     if (filterStatusPelamar === 'diterima') return application.status === 'accepted';
     if (filterStatusPelamar === 'ditolak') return application.status === 'rejected';
+    if (filterStatusPelamar === 'ditarik') return application.status === 'withdrawn';
     return true;
   })
 );
 
 export const getEvaluasiFiltered = (placements, evaluations, students, filterStatusEvaluasi, filterProdi, lowerQuery) => (
-  placements.filter((placement) => {
-    const student = students.find((item) => item.id === placement.student);
+  getLatestPlacementsByStudent(placements).filter((placement) => {
+    const student = students.find((item) => isSameStudent(placement.student, item.id));
 
     if (!matchesStudentProdi(placement.student, students, filterProdi)) return false;
-    if (!matchesSearchQuery(lowerQuery, student?.first_name, student?.last_name, student?.nim, student?.program_studi, placement.company_name, placement.supervisor_name)) return false;
+    if (!matchesSearchQuery(lowerQuery, student?.first_name, student?.last_name, student?.nim, student?.program_studi, ...getPlacementSearchValues(placement))) return false;
     if (!filterStatusEvaluasi) return true;
 
-    const evalUTS = evaluations.find((evaluation) => getPlacementId(evaluation) === placement.id && evaluation.eval_type === 'UTS');
-    const evalUAS = evaluations.find((evaluation) => getPlacementId(evaluation) === placement.id && evaluation.eval_type === 'UAS');
+    const { evalUTS, evalUAS } = getEvaluationPairForPlacement(evaluations, placement);
 
     if (filterStatusEvaluasi === 'menunggu') return !evalUTS?.is_filled || !evalUAS?.is_filled;
     if (filterStatusEvaluasi === 'selesai') return evalUTS?.is_filled && evalUAS?.is_filled;
@@ -230,27 +443,185 @@ export const getJobSeekerFiltered = (students, placements, weeklyReports, filter
 
 export const getBerkasFiltered = (placements, certificates, students, filterStatusBerkas, filterProdi, lowerQuery) => (
   getLatestPlacementsByStudent(placements).filter((placement) => {
-    const student = students.find((item) => item.id === placement.student);
+    const student = students.find((item) => isSameStudent(placement.student, item.id));
 
     if (!matchesStudentProdi(placement.student, students, filterProdi)) return false;
-    if (!matchesSearchQuery(lowerQuery, student?.first_name, student?.last_name, student?.nim, student?.program_studi, placement.company_name)) return false;
+    if (!matchesSearchQuery(lowerQuery, student?.first_name, student?.last_name, student?.nim, student?.program_studi, ...getPlacementSearchValues(placement))) return false;
     if (!filterStatusBerkas) return true;
 
-    const studentCertificate = certificates.find((certificate) => getPlacementId(certificate) === placement.id);
+    const studentCertificate = getCertificateForPlacement(certificates, placement);
     if (filterStatusBerkas === 'lulus') return studentCertificate !== undefined;
     if (filterStatusBerkas === 'menunggu') return studentCertificate === undefined;
     return true;
   })
 );
 
-export const getCertificateIssueMissingFields = (placementId, monthlyReports, finalReports, evaluations) => {
-  const monthlyCount = monthlyReports.filter((report) => report.placement === placementId).length;
-  const finalReport = finalReports.find((report) => report.placement === placementId);
-  const evalUTS = evaluations.find((evaluation) => getPlacementId(evaluation) === placementId && evaluation.eval_type === 'UTS');
-  const evalUAS = evaluations.find((evaluation) => getPlacementId(evaluation) === placementId && evaluation.eval_type === 'UAS');
+const parseDateValue = (value) => {
+  if (!value) return null;
+
+  const [year, month, day] = String(value).split('T')[0].split('-').map(Number);
+  if (!year || !month || !day) return null;
+
+  return new Date(Date.UTC(year, month - 1, day));
+};
+
+const formatDateValue = (date) => (
+  date ? date.toISOString().split('T')[0] : null
+);
+
+const sortPlacementsByPeriod = (a, b) => {
+  const aStart = parseDateValue(a?.start_date);
+  const bStart = parseDateValue(b?.start_date);
+  const startDiff = (aStart?.getTime() || 0) - (bStart?.getTime() || 0);
+
+  if (startDiff !== 0) return startDiff;
+
+  return getPlacementTimestamp(a) - getPlacementTimestamp(b);
+};
+
+export const calculateRequiredMonthlyReportCount = (startDate, endDate) => {
+  const start = parseDateValue(startDate);
+  const end = parseDateValue(endDate);
+
+  if (!start || !end || end < start) return 0;
+
+  let monthCount = (end.getUTCFullYear() - start.getUTCFullYear()) * 12
+    + (end.getUTCMonth() - start.getUTCMonth());
+
+  if (end.getUTCDate() >= start.getUTCDate()) {
+    monthCount += 1;
+  }
+
+  return Math.max(1, monthCount);
+};
+
+export const getMonthlyReportSummary = (placement, monthlyReports, effectiveEndDate = placement?.end_date) => {
+  const placementId = getEntityId(placement);
+  const submittedCount = monthlyReports.filter((report) => (
+    String(getPlacementId(report)) === String(placementId)
+  )).length;
+  const requiredCount = calculateRequiredMonthlyReportCount(placement?.start_date, effectiveEndDate);
+
+  return {
+    submittedCount,
+    requiredCount,
+    periodStartDate: placement?.start_date,
+    periodEndDate: effectiveEndDate,
+    isComplete: requiredCount > 0 && submittedCount >= requiredCount,
+  };
+};
+
+const getTransferCutoffDateForPlacement = (placement, relatedPlacements) => {
+  const placementStart = parseDateValue(placement?.start_date);
+  const placementEnd = parseDateValue(placement?.end_date);
+
+  if (!placementStart || !placementEnd) return null;
+
+  const cutoffDates = relatedPlacements
+    .filter((item) => String(item.id) !== String(placement.id))
+    .map((item) => ({
+      previousEndDate: parseDateValue(item.previous_placement_end_date),
+      nextStartDate: parseDateValue(item.start_date),
+    }))
+    .filter(({ previousEndDate, nextStartDate }) => (
+      previousEndDate
+      && nextStartDate
+      && previousEndDate >= placementStart
+      && previousEndDate <= placementEnd
+      && nextStartDate > previousEndDate
+    ))
+    .sort((a, b) => a.previousEndDate - b.previousEndDate);
+
+  return cutoffDates[0]?.previousEndDate || null;
+};
+
+const getCertificatePlacementPeriod = (placement, relatedPlacements) => {
+  const plannedEndDate = parseDateValue(placement?.end_date);
+  const transferCutoffDate = getTransferCutoffDateForPlacement(placement, relatedPlacements);
+  const shouldUseTransferCutoff = transferCutoffDate
+    && plannedEndDate
+    && transferCutoffDate < plannedEndDate;
+  const effectiveEndDate = shouldUseTransferCutoff
+    ? formatDateValue(transferCutoffDate)
+    : placement?.end_date;
+
+  return {
+    periodStartDate: placement?.start_date,
+    periodEndDate: effectiveEndDate,
+    usesTransferEndDate: Boolean(shouldUseTransferCutoff),
+  };
+};
+
+const getReportableCertificatePlacements = (placement, placements = []) => {
+  const placementId = getEntityId(placement);
+  const studentId = getStudentRefId(placement?.student);
+  const nonReportableStatuses = ['pending', 'rejected'];
+  const validHistoryStatuses = ['resigned', 'finished', 'completed', 'verified'];
+  const relatedPlacements = placements.filter((item) => {
+    const itemStudentId = getStudentRefId(item.student);
+    const isSelectedPlacement = String(item.id) === String(placementId);
+    const isSamePlacementStudent = studentId
+      && itemStudentId !== undefined
+      && itemStudentId !== null
+      && String(itemStudentId) === String(studentId);
+    const isValidHistory = !nonReportableStatuses.includes(item.status)
+      && (item.is_approved || validHistoryStatuses.includes(item.status));
+
+    return isSelectedPlacement || (isSamePlacementStudent && isValidHistory);
+  });
+
+  if (placement && !relatedPlacements.some((item) => String(item.id) === String(placementId))) {
+    relatedPlacements.push(placement);
+  }
+
+  return relatedPlacements.sort(sortPlacementsByPeriod);
+};
+
+export const getCertificateMonthlyReportSummary = (placement, monthlyReports, placements = []) => {
+  const relatedPlacements = getReportableCertificatePlacements(placement, placements);
+  const placementSummaries = relatedPlacements
+    .map((item) => {
+      const period = getCertificatePlacementPeriod(item, relatedPlacements);
+
+      return {
+        placement: item,
+        ...getMonthlyReportSummary(item, monthlyReports, period.periodEndDate),
+        usesTransferEndDate: period.usesTransferEndDate,
+      };
+    });
+  const submittedCount = placementSummaries.reduce((total, item) => total + item.submittedCount, 0);
+  const requiredCount = placementSummaries.reduce((total, item) => total + item.requiredCount, 0);
+
+  return {
+    submittedCount,
+    requiredCount,
+    placementSummaries,
+    isComplete: placementSummaries.length > 0
+      && requiredCount > 0
+      && submittedCount >= requiredCount,
+  };
+};
+
+export const getCertificateIssueMissingFields = (placement, monthlyReports, utsReports, finalReports, evaluations, placements = []) => {
+  if (!placement) {
+    return ['- Data penempatan magang tidak ditemukan'];
+  }
+
+  const placementId = getEntityId(placement);
+  const relatedPlacementIds = getReportableCertificatePlacements(placement, placements).map((item) => item.id);
+  const monthlyReportSummary = getCertificateMonthlyReportSummary(placement, monthlyReports, placements);
+  const utsReport = findLatestRecordForPlacementIds(utsReports, relatedPlacementIds, placementId);
+  const finalReport = findLatestRecordForPlacementIds(finalReports, relatedPlacementIds, placementId);
+  const evalUTS = findBestEvaluationForPlacementIds(evaluations, relatedPlacementIds, 'UTS', placementId);
+  const evalUAS = findBestEvaluationForPlacementIds(evaluations, relatedPlacementIds, 'UAS', placementId);
 
   const missing = [];
-  if (monthlyCount === 0) missing.push('- Laporan Bulanan (Belum ada sama sekali)');
+  if (monthlyReportSummary.placementSummaries.some((summary) => summary.requiredCount === 0)) {
+    missing.push('- Periode magang belum lengkap atau tanggal mulai/selesai tidak valid');
+  } else if (!monthlyReportSummary.isComplete) {
+    missing.push(`- Laporan Bulanan belum lengkap (${monthlyReportSummary.submittedCount}/${monthlyReportSummary.requiredCount} laporan terkumpul sesuai total durasi magang)`);
+  }
+  if (!utsReport) missing.push('- Dokumen Laporan Tengah Semester (UTS) belum diunggah');
   if (!finalReport) missing.push('- Dokumen Laporan Akhir (UAS) belum diunggah');
   if (!evalUTS?.is_filled) missing.push('- Nilai Evaluasi Kemajuan (UTS) dari Supervisor kosong');
   if (!evalUAS?.is_filled) missing.push('- Nilai Evaluasi Akhir (UAS) dari Supervisor kosong');
@@ -267,28 +638,43 @@ export const buildSelectedDetail = (
   evaluations,
   certificates,
   placements = []
-) => ({
-  placement,
-  student,
-  historyPlacements: placements
-    .filter((item) => item.student === student.id && item.id !== placement.id),
-  historyPlacementDetails: placements
-    .filter((item) => item.student === student.id && item.id !== placement.id)
-    .map((item) => ({
-      ...item,
-      monthlyReports: monthlyReports
-        .filter((report) => report.placement === item.id)
-        .sort((a, b) => a.report_month.localeCompare(b.report_month)),
-    })),
-  mhsMonthly: monthlyReports
-    .filter((report) => report.placement === placement.id)
-    .sort((a, b) => a.report_month.localeCompare(b.report_month)),
-  mhsUts: utsReports.find((report) => report.placement === placement.id),
-  mhsFinal: finalReports.find((report) => report.placement === placement.id),
-  evalUTS: evaluations.find((evaluation) => getPlacementId(evaluation) === placement.id && evaluation.eval_type === 'UTS'),
-  evalUAS: evaluations.find((evaluation) => getPlacementId(evaluation) === placement.id && evaluation.eval_type === 'UAS'),
-  mhsCert: certificates.find((certificate) => getPlacementId(certificate) === placement.id),
-});
+) => {
+  const placementMonthlyReports = monthlyReports
+    .filter((report) => String(getPlacementId(report)) === String(placement.id))
+    .sort((a, b) => a.report_month.localeCompare(b.report_month));
+  const historyPlacements = getPlacementHistoryForStudent(placements, student.id, placement.id);
+  const relatedPlacements = getReportableCertificatePlacements(placement, placements);
+  const relatedPlacementIds = relatedPlacements.map((item) => item.id);
+  const mhsUts = findLatestRecordForPlacementIds(utsReports, relatedPlacementIds, placement.id);
+  const mhsFinal = findLatestRecordForPlacementIds(finalReports, relatedPlacementIds, placement.id);
+  const evalUTS = findBestEvaluationForPlacementIds(evaluations, relatedPlacementIds, 'UTS', placement.id);
+  const evalUAS = findBestEvaluationForPlacementIds(evaluations, relatedPlacementIds, 'UAS', placement.id);
+
+  return {
+    placement,
+    student,
+    monthlyReportSummary: getCertificateMonthlyReportSummary(placement, monthlyReports, placements),
+    certificateMissingFields: getCertificateIssueMissingFields(placement, monthlyReports, utsReports, finalReports, evaluations, placements),
+    historyPlacements,
+    historyPlacementDetails: historyPlacements
+      .map((item) => ({
+        ...item,
+        monthlyReports: monthlyReports
+          .filter((report) => String(getPlacementId(report)) === String(item.id))
+          .sort((a, b) => a.report_month.localeCompare(b.report_month)),
+      })),
+    mhsMonthly: placementMonthlyReports,
+    mhsUts,
+    mhsFinal,
+    evalUTS,
+    evalUAS,
+    mhsUtsPlacement: relatedPlacements.find((item) => String(item.id) === String(getPlacementId(mhsUts))),
+    mhsFinalPlacement: relatedPlacements.find((item) => String(item.id) === String(getPlacementId(mhsFinal))),
+    evalUTSPlacement: relatedPlacements.find((item) => String(item.id) === String(getPlacementId(evalUTS))),
+    evalUASPlacement: relatedPlacements.find((item) => String(item.id) === String(getPlacementId(evalUAS))),
+    mhsCert: certificates.find((certificate) => String(getPlacementId(certificate)) === String(placement.id)),
+  };
+};
 
 export const getFileName = (url) => {
   if (!url) return '';
@@ -298,11 +684,10 @@ export const getFileName = (url) => {
 };
 
 export const buildEvaluationExportData = (placements, students, evaluations) => (
-  placements
+  getLatestPlacementsByStudent(placements)
     .map((placement) => {
-      const student = students.find((item) => item.id === placement.student);
-      const evalUTS = evaluations.find((evaluation) => getPlacementId(evaluation) === placement.id && evaluation.eval_type === 'UTS');
-      const evalUAS = evaluations.find((evaluation) => getPlacementId(evaluation) === placement.id && evaluation.eval_type === 'UAS');
+      const student = students.find((item) => isSameStudent(placement.student, item.id));
+      const { evalUTS, evalUAS } = getEvaluationPairForPlacement(evaluations, placement);
 
       if (!student) return null;
 
@@ -311,6 +696,7 @@ export const buildEvaluationExportData = (placements, students, evaluations) => 
         'Nama Mahasiswa': `${student.first_name} ${student.last_name}`,
         'Program Studi': student.program_studi,
         'Nama Perusahaan': placement.company_name,
+        'Perusahaan Lama': getPlacementPreviousCompanies(placement).join(', ') || '-',
         Supervisor: placement.supervisor_name,
         'Nilai UTS': evalUTS?.is_filled ? evalUTS.score : 'Belum Dinilai',
         'Feedback UTS': evalUTS?.is_filled ? evalUTS.feedback : '-',
@@ -332,13 +718,17 @@ export const buildIndustryExportData = (industries) => (
 );
 
 export const getDashboardBadges = (pendingUsers, placements, evaluations, applications, finalReports, certificates) => ({
-  approval: pendingUsers.length,
-  overview: placements.filter((placement) => !placement.is_approved).length,
-  evaluasi: evaluations.filter((evaluation) => !evaluation.is_filled).length,
-  pelamar: applications.filter((application) => application.status === 'pending').length,
-  berkas: placements.filter((placement) => {
-    const hasFinalReport = finalReports.some((report) => report.placement === placement.id);
-    const hasCertificate = certificates.some((certificate) => getPlacementId(certificate) === placement.id);
+  approval: pendingUsers.filter((user) => getRegistrationStatus(user) !== 'rejected').length,
+  overview: getPendingPlacementApprovals(placements).length,
+  evaluasi: getLatestPlacementsByStudent(placements).filter((placement) => !isPlacementEvaluationComplete(evaluations, placement)).length,
+  pelamar: applications.filter((application) => {
+    const studentId = application.student?.id || application.student;
+    return ['pending', 'withdrawn'].includes(application.status)
+      && !isStudentInterningOrGraduated(studentId, placements, certificates);
+  }).length,
+  berkas: getLatestPlacementsByStudent(placements).filter((placement) => {
+    const hasFinalReport = finalReports.some((report) => String(getPlacementId(report)) === String(placement.id));
+    const hasCertificate = Boolean(getCertificateForPlacement(certificates, placement));
     return hasFinalReport && !hasCertificate;
   }).length,
 });

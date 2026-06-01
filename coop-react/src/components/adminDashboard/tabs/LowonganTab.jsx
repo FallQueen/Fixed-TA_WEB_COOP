@@ -1,9 +1,12 @@
-import { Building2, CalendarClock, Edit, ExternalLink, FileEdit, Link2, Trash2 } from 'lucide-react';
+import { Bell, Building2, CalendarClock, Edit, ExternalLink, FileEdit, Link2, Trash2 } from 'lucide-react';
 import {
+  actionButtonGroup,
+  actionIconButton,
   badge,
   compactButton,
   emptyState,
   innerPanel,
+  metricTone,
   metricCard,
   metricGrid,
   tabPageHeader,
@@ -13,6 +16,26 @@ import {
 import GuidancePanel from './GuidancePanel';
 import PaginationControls from './PaginationControls';
 import usePagedData from './usePagedData';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const parseDateOnly = (value) => {
+  if (!value) return null;
+  const [year, month, day] = String(value).split('T')[0].split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
+const formatDateInput = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatDisplayDate = (value) => (
+  parseDateOnly(value)?.toLocaleDateString('id-ID') || '-'
+);
 
 function LowonganTab({
   styles,
@@ -27,11 +50,13 @@ function LowonganTab({
   handleEditClick,
   handleDeleteVacancy,
 }) {
-  const today = new Date();
+  const today = parseDateOnly(formatDateInput(new Date()));
+  const todayInput = formatDateInput(today);
   const withExternalLink = vacancies.filter((job) => job.external_apply_link).length;
   const expiringSoon = vacancies.filter((job) => {
-    if (!job.expires_at) return false;
-    const diffDays = Math.ceil((new Date(job.expires_at) - today) / (1000 * 60 * 60 * 24));
+    const expiryDate = parseDateOnly(job.expires_at);
+    if (!expiryDate) return false;
+    const diffDays = Math.round((expiryDate - today) / DAY_MS);
     return diffDays >= 0 && diffDays <= 7;
   }).length;
   const {
@@ -44,9 +69,9 @@ function LowonganTab({
   } = usePagedData(vacancies);
 
   const metrics = [
-    { icon: FileEdit, label: 'Lowongan Aktif', value: vacancies.length, tint: '#eef2ff', color: '#4f46e5' },
-    { icon: Link2, label: 'Link Eksternal', value: withExternalLink, tint: '#ecfdf5', color: '#10b981' },
-    { icon: CalendarClock, label: 'Akan Berakhir', value: expiringSoon, tint: '#fff7ed', color: '#f97316' },
+    { icon: FileEdit, label: 'Lowongan Aktif', value: vacancies.length, ...metricTone('info') },
+    { icon: Link2, label: 'Link Eksternal', value: withExternalLink, ...metricTone('success') },
+    { icon: CalendarClock, label: 'Akan Berakhir', value: expiringSoon, ...metricTone('warning') },
   ];
 
   return (
@@ -94,8 +119,8 @@ function LowonganTab({
 
           <div style={{ marginBottom: '15px' }}>
             <label style={styles.labelStyle}>Batas Akhir</label>
-            <input type="date" name="expires_at" required onChange={handleVacancyChange} value={vacancyForm.expires_at} className="input-focus" style={{ ...styles.modernInput, backgroundColor: '#ffffff' }} />
-            <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>Lowongan otomatis kadaluarsa setelah tanggal ini.</p>
+            <input type="date" name="expires_at" required min={todayInput} onChange={handleVacancyChange} value={vacancyForm.expires_at} className="input-focus" style={{ ...styles.modernInput, backgroundColor: '#ffffff' }} />
+            <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>Lowongan masih tampil sampai tanggal ini, lalu otomatis tidak tampil ke mahasiswa setelahnya.</p>
           </div>
 
           <div style={{ marginBottom: '15px' }}>
@@ -111,6 +136,40 @@ function LowonganTab({
             <label style={styles.labelStyle}>Persyaratan Khusus</label>
             <textarea name="requirements" rows="3" required onChange={handleVacancyChange} value={vacancyForm.requirements} className="input-focus" style={{ ...styles.modernInput, backgroundColor: '#ffffff', resize: 'vertical' }} placeholder="Kualifikasi akademik, skill teknis..." />
           </div>
+
+          {!editingVacancyId && (
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '14px',
+                marginBottom: '20px',
+                backgroundColor: vacancyForm.notify_job_seekers ? '#fff1f2' : '#ffffff',
+                border: `1px solid ${vacancyForm.notify_job_seekers ? '#fecaca' : '#e8eef7'}`,
+                borderRadius: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                name="notify_job_seekers"
+                checked={Boolean(vacancyForm.notify_job_seekers)}
+                onChange={handleVacancyChange}
+                className="custom-checkbox"
+                style={{ flexShrink: 0 }}
+              />
+              <div style={{ width: '34px', height: '34px', borderRadius: '12px', backgroundColor: '#ffffff', color: '#b31312', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #fecaca', flexShrink: 0 }}>
+                <Bell size={16} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ color: '#111827', fontSize: '12px', fontWeight: '900' }}>Kirim notifikasi Outlook ke job seeker</div>
+                <div style={{ marginTop: '3px', color: '#64748b', fontSize: '11px', fontWeight: '700', lineHeight: 1.45 }}>
+                  Email dikirim ke mahasiswa aktif yang belum punya tempat magang terverifikasi.
+                </div>
+              </div>
+            </label>
+          )}
 
           <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '10px', justifyContent: 'flex-end', borderTop: '1px solid #e8eef7', paddingTop: '20px' }}>
             <button type="submit" disabled={submittingVacancy} className="btn-hover" style={compactButton(styles, 'primary', { padding: '12px 24px', width: isMobile ? '100%' : 'auto' })}>
@@ -142,7 +201,7 @@ function LowonganTab({
                 </div>
               </div>
               {job.expires_at && (
-                <span style={badge('warning')}>Exp: {new Date(job.expires_at).toLocaleDateString('id-ID')}</span>
+                <span style={badge('warning')}>Exp: {formatDisplayDate(job.expires_at)}</span>
               )}
             </div>
 
@@ -163,9 +222,27 @@ function LowonganTab({
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', marginTop: 'auto' }}>
-              <button className="btn-hover" onClick={() => handleEditClick(job)} style={compactButton(styles, 'neutral', { flex: 1 })}><Edit size={14} /> Edit</button>
-              <button className="btn-hover" onClick={() => handleDeleteVacancy(job.id)} style={compactButton(styles, 'danger', { flex: 1 })}><Trash2 size={14} /> Hapus</button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto' }}>
+              <div style={actionButtonGroup(isMobile)}>
+                <button
+                  className="btn-hover"
+                  onClick={() => handleEditClick(job)}
+                  style={actionIconButton('neutral')}
+                  title="Edit lowongan"
+                  aria-label={`Edit lowongan ${job.title}`}
+                >
+                  <Edit size={15} />
+                </button>
+                <button
+                  className="btn-hover"
+                  onClick={() => handleDeleteVacancy(job.id)}
+                  style={actionIconButton('danger')}
+                  title="Hapus lowongan"
+                  aria-label={`Hapus lowongan ${job.title}`}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
             </div>
           </div>
         ))}

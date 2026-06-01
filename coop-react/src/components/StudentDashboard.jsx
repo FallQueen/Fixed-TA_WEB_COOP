@@ -10,12 +10,17 @@ import useStudentDashboardViewState from './studentDashboard/hooks/useStudentDas
 import { GLOBAL_STYLES } from './studentDashboard/styles';
 import useStudentActions from './useStudentActions';
 import useStudentDashboardData from './useStudentDashboardData';
+import AdminFeedbackLayer from './adminDashboard/AdminFeedbackLayer';
+import { useAdminFeedback } from './adminDashboard/hooks/useAdminFeedback.js';
 
 import { Loader2, Menu } from 'lucide-react';
+
+const GRADUATED_STUDENT_TABS = ['profil', 'notifikasi', 'sertifikat', 'pengaturan'];
 
 function StudentDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profil');
+  const studentFeedback = useAdminFeedback();
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem('token');
@@ -27,14 +32,23 @@ function StudentDashboard() {
     navigate,
     onUnauthorized: handleLogout,
   });
+  const hasIssuedCertificate = dashboardData.certificates.length > 0;
+  const hasCompletedPlacement = dashboardData.placements.some((placement) =>
+    ['completed', 'finished'].includes(placement.status)
+  );
+  const isGraduated = hasIssuedCertificate || hasCompletedPlacement;
+  const effectiveActiveTab = isGraduated && !GRADUATED_STUDENT_TABS.includes(activeTab)
+    ? (hasIssuedCertificate ? 'sertifikat' : 'profil')
+    : activeTab;
 
   const viewState = useStudentDashboardViewState({
-    activeTab,
+    activeTab: effectiveActiveTab,
     setActiveTab,
     editingReportId: dashboardData.editingReportId,
     evaluations: dashboardData.evaluations,
     monthlyReports: dashboardData.monthlyReports,
     placements: dashboardData.placements,
+    reportForm: dashboardData.reportForm,
     userId: dashboardData.userData?.id,
   });
 
@@ -44,6 +58,7 @@ function StudentDashboard() {
     fetchPlacementsAndEvaluations: dashboardData.fetchPlacementsAndEvaluations,
     fetchProfile: dashboardData.fetchProfile,
     fetchSubmittedReports: dashboardData.fetchSubmittedReports,
+    fetchStudentApplications: dashboardData.fetchStudentApplications,
     fetchWeeklyReports: dashboardData.fetchWeeklyReports,
     handleLogout,
     deleteAllNotifications: dashboardData.deleteAllNotifications,
@@ -51,7 +66,7 @@ function StudentDashboard() {
     markAllNotificationsAsRead: dashboardData.markAllNotificationsAsRead,
     markNotificationAsRead: dashboardData.markNotificationAsRead,
     selectedVacancy: viewState.selectedVacancy,
-    setActiveTab: viewState.setActiveTab,
+    setActiveTab: viewState.handleTabChange,
     setApplicationForm: dashboardData.setApplicationForm,
     setChangingPassword: dashboardData.setChangingPassword,
     setEditingReportId: dashboardData.setEditingReportId,
@@ -77,11 +92,13 @@ function StudentDashboard() {
     setUtsReportFile: dashboardData.setUtsReportFile,
     setWeeklyForm: dashboardData.setWeeklyForm,
     userData: dashboardData.userData,
+    feedback: studentFeedback,
   });
 
   const dataForTabs = {
     ...dashboardData,
     approvedPlacements: viewState.approvedPlacements,
+    isGraduated,
   };
 
   if (dashboardData.loading) {
@@ -115,6 +132,7 @@ function StudentDashboard() {
         hasApprovedPlacement={viewState.hasApprovedPlacement}
         hasSeenUas={viewState.hasSeenUas}
         hasSeenUts={viewState.hasSeenUts}
+        isGraduated={isGraduated}
         isMobile={viewState.isMobile}
         isSidebarCollapsed={viewState.isSidebarCollapsed}
         isSidebarOpen={viewState.isSidebarOpen}
@@ -145,6 +163,7 @@ function StudentDashboard() {
           actions={studentActions}
           data={dataForTabs}
           viewState={viewState}
+          feedback={studentFeedback}
         />
       </div>
 
@@ -161,6 +180,7 @@ function StudentDashboard() {
         styles={viewState.styles}
         submittingApplication={dashboardData.submittingApplication}
         userData={dashboardData.userData}
+        feedback={studentFeedback}
       />
 
       <DocumentPreviewModal
@@ -169,6 +189,8 @@ function StudentDashboard() {
         setPreviewDoc={viewState.setPreviewDoc}
         styles={viewState.styles}
       />
+
+      <AdminFeedbackLayer feedback={studentFeedback} isMobile={viewState.isMobile} />
     </div>
   );
 }

@@ -16,25 +16,42 @@ export const getPlacementOptionLabel = (placement) =>
 
 export const getPlacementState = (placements) => {
   const approvedPlacement = placements.find((placement) => placement.is_approved);
+  const pendingPlacement = placements.find((placement) => !placement.is_approved && placement.status === 'pending');
+  const currentPlacement = approvedPlacement || placements[0] || null;
 
   return {
     approvedPlacement,
     approvedPlacementId: approvedPlacement?.id,
     approvedPlacements: placements.filter((placement) => placement.is_approved),
-    currentPlacement: placements[0] ?? null,
+    currentPlacement,
     hasAnyPlacement: placements.length > 0,
     hasApprovedPlacement: Boolean(approvedPlacement),
-    hasPendingPlacement: placements.length > 0 && !approvedPlacement,
-    historyPlacements: placements.slice(1),
+    hasPendingPlacement: Boolean(pendingPlacement),
+    historyPlacements: currentPlacement
+      ? placements.filter((placement) => String(placement.id) !== String(currentPlacement.id))
+      : [],
+    pendingPlacement,
   };
 };
 
-export const getIsFirstMonthReport = (monthlyReports, editingReportId) => {
+const isSamePlacement = (report, placementId) => (
+  placementId
+  && String(getPlacementId(report.placement)) === String(placementId)
+);
+
+export const getIsFirstMonthReport = (monthlyReports, editingReportId, selectedPlacementId) => {
   if (!editingReportId) {
-    return monthlyReports.length === 0;
+    if (!selectedPlacementId) {
+      return monthlyReports.length === 0;
+    }
+
+    return !monthlyReports.some((report) => isSamePlacement(report, selectedPlacementId));
   }
 
-  const oldestReport = [...monthlyReports].sort(
+  const editedReport = monthlyReports.find((report) => report.id === editingReportId);
+  const editedPlacementId = getPlacementId(editedReport?.placement) || selectedPlacementId;
+  const reportsForPlacement = monthlyReports.filter((report) => isSamePlacement(report, editedPlacementId));
+  const oldestReport = reportsForPlacement.sort(
     (a, b) => new Date(a.submitted_at) - new Date(b.submitted_at)
   )[0];
 

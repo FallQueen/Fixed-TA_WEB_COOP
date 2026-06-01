@@ -34,6 +34,7 @@ export default function useStudentDashboardViewState({
   monthlyReports,
   placements,
   editingReportId,
+  reportForm,
   userId,
 }) {
   const [isMobile, setIsMobile] = useState(isMobileViewport());
@@ -76,6 +77,7 @@ export default function useStudentDashboardViewState({
 
   const styles = getDashboardStyles(isMobile, isSidebarOpen, isSidebarCollapsed);
   const placementState = getPlacementState(placements);
+  const monthlyReportPlacementId = reportForm?.placement || placementState.approvedPlacementId;
   const utsEvaluation = getEvaluation(evaluations, placementState.approvedPlacementId, 'UTS');
   const uasEvaluation = getEvaluation(evaluations, placementState.approvedPlacementId, 'UAS');
   const hasSeenUts = getStoredSeenState(userId, placementState.approvedPlacementId, 'uts');
@@ -100,7 +102,7 @@ export default function useStudentDashboardViewState({
     setSelectedVacancy,
     styles,
     ...placementState,
-    isFirstMonthReport: getIsFirstMonthReport(monthlyReports, editingReportId),
+    isFirstMonthReport: getIsFirstMonthReport(monthlyReports, editingReportId, monthlyReportPlacementId),
     isUasTriggered: Boolean(uasEvaluation),
     isUtsTriggered: Boolean(utsEvaluation),
     uasEvaluation,

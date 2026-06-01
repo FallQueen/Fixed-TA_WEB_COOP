@@ -6,8 +6,25 @@ import {
   EMPTY_REPORT_FORM,
   EMPTY_UTS_REPORT_DATA,
   EMPTY_WEEKLY_FORM,
+  MIN_INTERNSHIP_WORKING_DAYS,
+  calculateWorkingDays,
   createAuthHeaders,
 } from './constants';
+import { getFeedbackApi } from './adminDashboard/hooks/useAdminFeedback';
+
+const getApiErrorMessage = (error, fallback) => {
+  const data = error?.response?.data;
+
+  if (!data) return fallback;
+  if (typeof data === 'string') return data;
+  if (Array.isArray(data)) return data.join('\n');
+  if (data.error) return Array.isArray(data.error) ? data.error.join('\n') : data.error;
+  if (data.detail) return Array.isArray(data.detail) ? data.detail.join('\n') : data.detail;
+
+  return Object.entries(data)
+    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+    .join('\n') || fallback;
+};
 
 function useStudentActions({
   fetchMonthlyReports,
@@ -15,6 +32,7 @@ function useStudentActions({
   fetchPlacementsAndEvaluations,
   fetchProfile,
   fetchSubmittedReports,
+  fetchStudentApplications,
   fetchWeeklyReports,
   handleLogout,
   deleteAllNotifications,
@@ -48,7 +66,10 @@ function useStudentActions({
   setUtsReportFile,
   setWeeklyForm,
   userData,
+  feedback,
 }) {
+  const { notify, showAlert, showConfirm } = getFeedbackApi(feedback);
+
   const closeModal = () => {
     setSelectedVacancy(null);
     setIsApplying(false);
@@ -63,7 +84,7 @@ function useStudentActions({
   const handleUpload = async (event, files) => {
     event.preventDefault();
     if (!files.cv_file && !files.portofolio_file) {
-      alert('Pilih file yang ingin diupload terlebih dahulu!');
+      notify({ type: 'warning', title: 'File Belum Dipilih', message: 'Pilih file yang ingin diupload terlebih dahulu.' });
       return;
     }
 
@@ -77,12 +98,12 @@ function useStudentActions({
         headers: createAuthHeaders({ 'Content-Type': 'multipart/form-data' }),
       });
 
-      alert('Berkas berhasil diperbarui! 🎉');
+      notify({ type: 'success', title: 'Berkas Diperbarui', message: 'Berkas profil berhasil diperbarui.' });
       setUserData(response.data);
       setFiles({ cv_file: null, portofolio_file: null });
       document.getElementById('upload-form')?.reset();
     } catch {
-      alert('Gagal mengupload berkas.');
+      notify({ type: 'danger', title: 'Gagal Upload Berkas', message: 'Berkas belum berhasil diunggah.' });
     } finally {
       setUploading(false);
     }
@@ -91,7 +112,7 @@ function useStudentActions({
   const handleUpdateProfile = async (event, profileForm) => {
     event.preventDefault();
     if (!profileForm.username) {
-      alert('Username tidak boleh kosong!');
+      notify({ type: 'warning', title: 'Username Kosong', message: 'Username tidak boleh kosong.' });
       return;
     }
 
@@ -107,7 +128,7 @@ function useStudentActions({
         { headers: createAuthHeaders() }
       );
 
-      alert('Profil & Username berhasil diperbarui! ✅\nSilakan gunakan Username baru ini saat login berikutnya.');
+      notify({ type: 'success', title: 'Profil Diperbarui', message: 'Profil dan username berhasil diperbarui. Gunakan username baru saat login berikutnya.' });
       setUserData(response.data);
       syncProfileForm(response.data);
       fetchProfile();
@@ -115,7 +136,7 @@ function useStudentActions({
       const errorMessage =
         error.response?.data?.username?.[0] ||
         'Gagal memperbarui profil. Pastikan username belum dipakai orang lain.';
-      alert(errorMessage);
+      notify({ type: 'danger', title: 'Gagal Memperbarui Profil', message: errorMessage });
     } finally {
       setIsUpdatingProfile(false);
     }
@@ -131,7 +152,7 @@ function useStudentActions({
   const handlePasswordChange = async (event, passwordForm) => {
     event.preventDefault();
     if (passwordForm.new_password !== passwordForm.confirm_password) {
-      alert('Password baru dan konfirmasi password tidak cocok!');
+      notify({ type: 'warning', title: 'Konfirmasi Password Tidak Cocok', message: 'Password baru dan konfirmasi password tidak cocok.' });
       return;
     }
 
@@ -146,13 +167,19 @@ function useStudentActions({
         { headers: createAuthHeaders() }
       );
 
-      alert('Berhasil! Password kamu telah diperbarui. 🔒\nSesi akan berakhir, silakan login kembali.');
+      await showAlert({
+        type: 'success',
+        title: 'Password Diperbarui',
+        message: 'Password kamu telah diperbarui. Sesi akan berakhir, silakan login kembali.',
+        confirmLabel: 'Login Ulang',
+      });
       handleLogout();
     } catch (error) {
-      alert(
-        error.response?.data?.old_password?.[0] ||
-          'Gagal mengubah password. Cek kembali password lama kamu.'
-      );
+      notify({
+        type: 'danger',
+        title: 'Gagal Mengubah Password',
+        message: error.response?.data?.old_password?.[0] || 'Gagal mengubah password. Cek kembali password lama kamu.',
+      });
     } finally {
       setChangingPassword(false);
     }
@@ -161,7 +188,11 @@ function useStudentActions({
   const handleApplySubmit = async (event, applicationForm) => {
     event.preventDefault();
     if (!userData?.cv_file) {
-      alert('Maaf, kamu wajib mengunggah CV di tab Profil terlebih dahulu sebelum melamar!');
+      await showAlert({
+        type: 'warning',
+        title: 'CV Belum Diunggah',
+        message: 'Kamu wajib mengunggah CV di tab Profil terlebih dahulu sebelum melamar.',
+      });
       return;
     }
 
@@ -173,17 +204,75 @@ function useStudentActions({
         { headers: createAuthHeaders() }
       );
 
-      alert('Lamaran Berhasil Dikirim! Admin akan meneruskan data kamu ke perusahaan.');
+      notify({ type: 'success', title: 'Lamaran Berhasil Dikirim', message: 'Admin akan meneruskan data kamu ke perusahaan.' });
       closeModal();
+      fetchStudentApplications?.();
     } catch {
-      alert('Terjadi kesalahan. Mungkin kamu sudah melamar posisi ini?');
+      notify({ type: 'danger', title: 'Gagal Mengirim Lamaran', message: 'Terjadi kesalahan. Mungkin kamu sudah melamar posisi ini.' });
     } finally {
       setSubmittingApplication(false);
     }
   };
 
+  const handleWithdrawApplication = async (application, reason) => {
+    if (!application) {
+      return { ok: false, message: 'Lamaran tidak ditemukan.' };
+    }
+
+    const withdrawalReason = String(reason || '').trim();
+    if (!withdrawalReason) {
+      return { ok: false, message: 'Alasan menarik lamaran wajib diisi.' };
+    }
+
+    try {
+      await axios.patch(
+        `${API_BASE_URL}/applications/${application.id}/`,
+        {
+          status: 'withdrawn',
+          withdrawal_reason: withdrawalReason,
+        },
+        { headers: createAuthHeaders() }
+      );
+
+      fetchStudentApplications?.();
+      fetchNotifications?.();
+      return { ok: true, message: 'Lamaran berhasil ditarik. Admin akan melihat alasan penarikanmu.' };
+    } catch (error) {
+      return { ok: false, message: getApiErrorMessage(error, 'Gagal menarik lamaran. Silakan coba lagi.') };
+    }
+  };
+
   const handlePlacementSubmit = async (event, acceptanceLetter, placementForm) => {
     event.preventDefault();
+
+    if (
+      placementForm.previous_placement_end_date
+      && placementForm.start_date
+      && placementForm.start_date <= placementForm.previous_placement_end_date
+    ) {
+      await showAlert({
+        type: 'warning',
+        title: 'Tanggal Pindah Tidak Valid',
+        message: 'Tanggal mulai tempat magang baru harus setelah tanggal terakhir bekerja di tempat magang lama.',
+      });
+      return;
+    }
+
+    if (placementForm.previous_placement_end_date && !String(placementForm.transfer_reason || '').trim()) {
+      notify({ type: 'warning', title: 'Alasan Pindah Kosong', message: 'Alasan pindah tempat magang wajib diisi.' });
+      return;
+    }
+
+    const workingDays = calculateWorkingDays(placementForm.start_date, placementForm.end_date);
+    if (!placementForm.previous_placement_end_date && workingDays < MIN_INTERNSHIP_WORKING_DAYS) {
+      await showAlert({
+        type: 'warning',
+        title: 'Durasi Magang Belum Cukup',
+        message: `Durasi magang minimal ${MIN_INTERNSHIP_WORKING_DAYS} hari kerja (Senin-Jumat). Durasi yang dipilih saat ini ${workingDays} hari kerja.`,
+      });
+      return;
+    }
+
     setSubmittingPlacement(true);
 
     const formData = new FormData();
@@ -197,13 +286,40 @@ function useStudentActions({
         headers: createAuthHeaders({ 'Content-Type': 'multipart/form-data' }),
       });
 
-      alert('Laporan Magang berhasil dikirim! Menunggu verifikasi Admin.');
+      notify({ type: 'success', title: 'Laporan Magang Dikirim', message: 'Laporan magang berhasil dikirim dan menunggu verifikasi admin.' });
       setActiveTab('profil');
       fetchPlacementsAndEvaluations();
-    } catch {
-      alert('Gagal mengirim laporan.');
+      fetchStudentApplications?.();
+    } catch (error) {
+      notify({ type: 'danger', title: 'Gagal Mengirim Laporan', message: getApiErrorMessage(error, 'Gagal mengirim laporan.') });
     } finally {
       setSubmittingPlacement(false);
+    }
+  };
+
+  const handleRequestSupervisorChange = async (placementId, supervisorChangeForm) => {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/placements/${placementId}/request-supervisor-change/`,
+        supervisorChangeForm,
+        { headers: createAuthHeaders() }
+      );
+
+      notify({
+        type: 'success',
+        title: 'Perubahan Supervisor Diajukan',
+        message: response.data?.message || 'Data supervisor baru sedang menunggu persetujuan admin.',
+      });
+      fetchPlacementsAndEvaluations();
+      fetchNotifications?.();
+      return true;
+    } catch (error) {
+      notify({
+        type: 'danger',
+        title: 'Pengajuan Belum Terkirim',
+        message: getApiErrorMessage(error, 'Perubahan kontak supervisor belum berhasil diajukan.'),
+      });
+      return false;
     }
   };
 
@@ -216,11 +332,11 @@ function useStudentActions({
         headers: createAuthHeaders(),
       });
 
-      alert('Laporan Mingguan berhasil dikirim!');
+      notify({ type: 'success', title: 'Laporan Mingguan Dikirim', message: 'Laporan mingguan berhasil dikirim.' });
       setWeeklyForm({ ...EMPTY_WEEKLY_FORM });
       fetchWeeklyReports();
     } catch {
-      alert('Gagal mengirim laporan.');
+      notify({ type: 'danger', title: 'Gagal Mengirim Laporan', message: 'Laporan mingguan belum berhasil dikirim.' });
     } finally {
       setSubmittingWeekly(false);
     }
@@ -240,19 +356,19 @@ function useStudentActions({
         await axios.patch(`${API_BASE_URL}/monthly-reports/${editingReportId}/`, reportForm, {
           headers: createAuthHeaders(),
         });
-        alert('Laporan Bulanan berhasil diperbarui! ✅');
+        notify({ type: 'success', title: 'Laporan Bulanan Diperbarui', message: 'Laporan bulanan berhasil diperbarui.' });
       } else {
         await axios.post(`${API_BASE_URL}/monthly-reports/`, reportForm, {
           headers: createAuthHeaders(),
         });
-        alert('Laporan Bulanan berhasil dikirim! ✅');
+        notify({ type: 'success', title: 'Laporan Bulanan Dikirim', message: 'Laporan bulanan berhasil dikirim.' });
       }
 
       setReportForm({ ...EMPTY_REPORT_FORM });
       setEditingReportId(null);
       fetchMonthlyReports();
-    } catch {
-      alert('Gagal memproses laporan.');
+    } catch (error) {
+      notify({ type: 'danger', title: 'Gagal Memproses Laporan', message: getApiErrorMessage(error, 'Gagal memproses laporan.') });
     } finally {
       setSubmittingReport(false);
     }
@@ -276,7 +392,7 @@ function useStudentActions({
     try {
       await markNotificationAsRead(notificationId);
     } catch {
-      alert('Gagal menandai notifikasi sebagai dibaca.');
+      notify({ type: 'danger', title: 'Gagal Memperbarui Notifikasi', message: 'Gagal menandai notifikasi sebagai dibaca.' });
     }
   };
 
@@ -284,31 +400,43 @@ function useStudentActions({
     try {
       await markAllNotificationsAsRead();
     } catch {
-      alert('Gagal menandai semua notifikasi.');
+      notify({ type: 'danger', title: 'Gagal Memperbarui Notifikasi', message: 'Gagal menandai semua notifikasi.' });
     }
   };
 
   const handleDeleteNotification = async (notificationId) => {
-    if (!window.confirm('Hapus notifikasi ini?')) {
+    const confirmed = await showConfirm({
+      type: 'confirm',
+      title: 'Hapus Notifikasi?',
+      message: 'Notifikasi ini akan dihapus dari daftar kamu.',
+      confirmLabel: 'Hapus',
+    });
+    if (!confirmed) {
       return;
     }
 
     try {
       await deleteNotification(notificationId);
     } catch {
-      alert('Gagal menghapus notifikasi.');
+      notify({ type: 'danger', title: 'Gagal Menghapus Notifikasi', message: 'Gagal menghapus notifikasi.' });
     }
   };
 
   const handleDeleteAllNotifications = async () => {
-    if (!window.confirm('Hapus semua notifikasi? Tindakan ini tidak bisa dibatalkan.')) {
+    const confirmed = await showConfirm({
+      type: 'danger',
+      title: 'Hapus Semua Notifikasi?',
+      message: 'Semua notifikasi akan dihapus. Tindakan ini tidak bisa dibatalkan.',
+      confirmLabel: 'Hapus Semua',
+    });
+    if (!confirmed) {
       return;
     }
 
     try {
       await deleteAllNotifications();
     } catch {
-      alert('Gagal menghapus semua notifikasi.');
+      notify({ type: 'danger', title: 'Gagal Menghapus Notifikasi', message: 'Gagal menghapus semua notifikasi.' });
     }
   };
 
@@ -317,7 +445,7 @@ function useStudentActions({
       try {
         await markNotificationAsRead(notification.id);
       } catch {
-        alert('Gagal membuka notifikasi.');
+        notify({ type: 'danger', title: 'Gagal Membuka Notifikasi', message: 'Gagal membuka notifikasi.' });
         return;
       }
     }
@@ -353,18 +481,18 @@ function useStudentActions({
         await axios.patch(`${API_BASE_URL}/${endpoint}/${existingReport.id}/`, formData, {
           headers: createAuthHeaders({ 'Content-Type': 'multipart/form-data' }),
         });
-        alert(successMessages.update);
+        notify({ type: 'success', title: 'Laporan Diperbarui', message: successMessages.update });
       } else {
         await axios.post(`${API_BASE_URL}/${endpoint}/`, formData, {
           headers: createAuthHeaders({ 'Content-Type': 'multipart/form-data' }),
         });
-        alert(successMessages.create);
+        notify({ type: 'success', title: 'Laporan Dikirim', message: successMessages.create });
       }
 
       resetData();
       fetchSubmittedReports();
     } catch {
-      alert('Gagal memproses laporan.');
+      notify({ type: 'danger', title: 'Gagal Memproses Laporan', message: 'Gagal memproses laporan.' });
     } finally {
       setSubmitting(false);
     }
@@ -419,6 +547,7 @@ function useStudentActions({
     handleDeleteAllNotifications,
     handleDeleteNotification,
     handleApplySubmit,
+    handleWithdrawApplication,
     handleEditMonthlyReport,
     handleFileChange,
     handleFinalReportSubmit,
@@ -427,6 +556,7 @@ function useStudentActions({
     handleOpenNotification,
     handlePasswordChange,
     handlePlacementSubmit,
+    handleRequestSupervisorChange,
     handleProfileFormChange,
     handleReportChange,
     handleReportSubmit,
