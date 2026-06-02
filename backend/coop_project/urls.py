@@ -10,7 +10,8 @@ from core_app.views import (
     register_student, UserViewSet, VacancyViewSet, ApplicationViewSet, 
     PlacementViewSet, send_weekly_reminders, get_industry_data, send_report_reminders,
     send_completion_reminders, UtsReportViewSet, NotificationViewSet,
-    ChangePasswordView, confirm_password_reset, login_user, microsoft_sso_login, microsoft_sso_callback
+    ChangePasswordView, confirm_password_reset, login_user, microsoft_sso_login, microsoft_sso_callback,
+    microsoft_sso_admin_link, microsoft_sso_admin_unlink
 )
 
 router = DefaultRouter()
@@ -34,6 +35,8 @@ urlpatterns = [
     path('api/auth/password-reset/confirm/', confirm_password_reset, name='confirm-password-reset'),
     path('api/auth/microsoft/login/', microsoft_sso_login, name='microsoft-sso-login'),
     path('api/auth/microsoft/callback/', microsoft_sso_callback, name='microsoft-sso-callback'),
+    path('api/auth/microsoft/admin-link/', microsoft_sso_admin_link, name='microsoft-sso-admin-link'),
+    path('api/auth/microsoft/admin-unlink/', microsoft_sso_admin_unlink, name='microsoft-sso-admin-unlink'),
     
     # --- 2. BARU MASUKKAN ROUTER ---
     path('api/', include(router.urls)),

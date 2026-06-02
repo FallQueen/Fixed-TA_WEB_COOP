@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import api from '../../../api/axios';
 import { API_ROUTES } from '../constants';
 import { getStudentApprovalMissingFields } from '../helpers';
@@ -22,6 +23,7 @@ export default function useStudentActions({
   feedback,
 }) {
   const { notify, showAlert, showConfirm, showPrompt } = getFeedbackApi(feedback);
+  const [isUpdatingMicrosoftConnection, setIsUpdatingMicrosoftConnection] = useState(false);
 
   const handleToggleUserSelection = (userId) => {
     setSelectedUserIds((prev) => (
@@ -181,6 +183,53 @@ export default function useStudentActions({
     setPasswordForm({ ...passwordForm, [e.target.name]: e.target.value });
   };
 
+  const handleConnectMicrosoft = async () => {
+    setIsUpdatingMicrosoftConnection(true);
+    try {
+      const response = await api.post(API_ROUTES.microsoftAdminLink);
+      if (!response.data?.authorization_url) {
+        throw new Error('Microsoft authorization URL is missing.');
+      }
+      window.location.assign(response.data.authorization_url);
+    } catch {
+      notify({
+        type: 'danger',
+        title: 'Koneksi Microsoft Gagal Dimulai',
+        message: 'Portal belum dapat membuka halaman login Microsoft. Periksa konfigurasi SSO atau coba lagi.',
+      });
+      setIsUpdatingMicrosoftConnection(false);
+    }
+  };
+
+  const handleDisconnectMicrosoft = async () => {
+    const confirmed = await showConfirm({
+      type: 'warning',
+      title: 'Putuskan Koneksi Microsoft?',
+      message: 'Login Microsoft untuk akun admin ini akan dinonaktifkan. Admin tetap dapat masuk memakai ID login dan password portal.',
+      confirmLabel: 'Putuskan Koneksi',
+    });
+    if (!confirmed) return;
+
+    setIsUpdatingMicrosoftConnection(true);
+    try {
+      const response = await api.post(API_ROUTES.microsoftAdminUnlink);
+      notify({
+        type: 'success',
+        title: 'Koneksi Microsoft Diputuskan',
+        message: response.data?.message || 'Akun Microsoft tidak lagi terhubung ke akun admin.',
+      });
+      await fetchAdminData();
+    } catch {
+      notify({
+        type: 'danger',
+        title: 'Gagal Memutuskan Koneksi',
+        message: 'Koneksi Microsoft belum berhasil diputuskan.',
+      });
+    } finally {
+      setIsUpdatingMicrosoftConnection(false);
+    }
+  };
+
   const handleApproveStudent = async (user) => {
     const missing = getStudentApprovalMissingFields(user);
 
@@ -310,6 +359,9 @@ export default function useStudentActions({
     handleProfileFormChange,
     handleAdminPasswordChange,
     handlePasswordFormChange,
+    handleConnectMicrosoft,
+    handleDisconnectMicrosoft,
+    isUpdatingMicrosoftConnection,
     handleApproveStudent,
     handleRejectStudent,
     handleApproveAllStudents,

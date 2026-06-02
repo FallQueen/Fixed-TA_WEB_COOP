@@ -70,6 +70,8 @@ export const API_ROUTES = {
   industries: 'industries/',
   vacancies: 'vacancies/',
   changePassword: 'users/change-password/',
+  microsoftAdminLink: 'auth/microsoft/admin-link/',
+  microsoftAdminUnlink: 'auth/microsoft/admin-unlink/',
   sendReminders: 'send-reminders/',
   sendReportReminders: 'send-report-reminders/',
   sendCompletionReminders: 'send-completion-reminders/',

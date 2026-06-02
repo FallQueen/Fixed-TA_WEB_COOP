@@ -4,9 +4,12 @@ import {
   CheckCircle,
   Fingerprint,
   KeyRound,
+  Link2,
   LockKeyhole,
+  Mail,
   Save,
   ShieldCheck,
+  Unlink,
   UserCog,
 } from 'lucide-react';
 import {
@@ -75,6 +78,10 @@ function PengaturanTab({
   passwordForm,
   handlePasswordFormChange,
   isChangingPassword,
+  adminData,
+  handleConnectMicrosoft,
+  handleDisconnectMicrosoft,
+  isUpdatingMicrosoftConnection,
 }) {
   const passwordMismatch = Boolean(passwordForm.new_password && passwordForm.confirm_password && passwordForm.new_password !== passwordForm.confirm_password);
   const passwordMatch = Boolean(passwordForm.new_password && passwordForm.confirm_password && passwordForm.new_password === passwordForm.confirm_password);
@@ -150,6 +157,66 @@ function PengaturanTab({
                 <Save size={15} /> {isUpdatingProfile ? 'Menyimpan...' : 'Simpan ID & Profil'}
               </button>
             </form>
+          </div>
+
+          <div style={{ ...styles.card, marginBottom: 0, overflow: 'hidden', padding: 0 }}>
+            <div style={cardHeader(isMobile)}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={iconBox(statusTones.success.tint, statusTones.success.color)}>
+                  <Mail size={19} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <h3 style={sectionTitle}>Integrasi Microsoft Outlook</h3>
+                  <p style={helperText}>Hubungkan identitas Outlook resmi untuk login admin yang lebih praktis.</p>
+                </div>
+              </div>
+              <span style={badge(adminData?.is_microsoft_connected ? 'success' : 'warning')}>
+                {adminData?.is_microsoft_connected ? <CheckCircle size={12} /> : <AlertCircle size={12} />}
+                {adminData?.is_microsoft_connected ? 'Sudah Terhubung' : 'Belum Terhubung'}
+              </span>
+            </div>
+
+            <div style={{ padding: '18px' }}>
+              <div style={{ ...innerPanel, marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <Mail size={17} color={adminData?.is_microsoft_connected ? statusTones.success.color : adminColors.textSubtle} style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, color: adminColors.textMuted, fontSize: '11px', fontWeight: '900', textTransform: 'uppercase' }}>
+                      Akun Microsoft Login
+                    </p>
+                    <p style={{ margin: '5px 0 0', color: adminColors.text, fontSize: '14px', lineHeight: 1.45, fontWeight: '900', overflowWrap: 'anywhere' }}>
+                      {adminData?.microsoft_email || 'Belum ada akun Outlook yang dihubungkan'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <p style={{ ...helperText, margin: '0 0 14px' }}>
+                Gunakan akun Microsoft yang memang dapat login. Jika alamat Unit Co-op berupa shared mailbox, hubungkan akun staf resmi yang memiliki akses ke mailbox tersebut.
+              </p>
+
+              {adminData?.is_microsoft_connected ? (
+                <button
+                  type="button"
+                  disabled={isUpdatingMicrosoftConnection}
+                  onClick={handleDisconnectMicrosoft}
+                  className="btn-hover"
+                  style={compactButton(styles, 'danger', { width: '100%', padding: '11px 14px' })}
+                >
+                  <Unlink size={15} /> {isUpdatingMicrosoftConnection ? 'Memproses...' : 'Putuskan Koneksi Microsoft'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isUpdatingMicrosoftConnection}
+                  onClick={handleConnectMicrosoft}
+                  className="btn-hover"
+                  style={compactButton(styles, 'success', { width: '100%', padding: '11px 14px' })}
+                >
+                  <Link2 size={15} /> {isUpdatingMicrosoftConnection ? 'Membuka Microsoft...' : 'Hubungkan Microsoft Outlook'}
+                </button>
+              )}
+            </div>
           </div>
 
           <GuidancePanel

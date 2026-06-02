@@ -50,6 +50,7 @@ REQUIRED_REGISTRATION_DOCUMENTS = {
 MICROSOFT_OAUTH_STATE_SALT = 'coop.microsoft-sso.state'
 MICROSOFT_REGISTER_TOKEN_SALT = 'coop.microsoft-sso.register-token'
 MICROSOFT_GRAPH_ME_URL = 'https://graph.microsoft.com/v1.0/me?$select=id,displayName,mail,userPrincipalName,givenName,surname'
+MICROSOFT_ADMIN_LINK_FLOW = 'admin_link'
 
 
 def invalid_login_response():
@@ -131,10 +132,45 @@ def microsoft_register_error_redirect(message):
     return redirect(get_frontend_url('/register', microsoft_error=message))
 
 
+def microsoft_admin_link_redirect(message=''):
+    query_params = {
+        'tab': 'pengaturan',
+        'microsoft_link_error': message,
+    }
+    if not message:
+        query_params['microsoft_linked'] = '1'
+
+    return redirect(get_frontend_url('/admin-dashboard', **query_params))
+
+
 def get_microsoft_error_redirect(flow):
     if flow == 'register':
         return microsoft_register_error_redirect
+    if flow == MICROSOFT_ADMIN_LINK_FLOW:
+        return microsoft_admin_link_redirect
     return microsoft_sso_error_redirect
+
+
+def get_microsoft_flow(state_payload):
+    flow = state_payload.get('flow')
+    if flow in ['register', MICROSOFT_ADMIN_LINK_FLOW]:
+        return flow
+    return 'login'
+
+
+def build_microsoft_authorization_url(config, state):
+    return (
+        f"https://login.microsoftonline.com/{config['tenant_id']}/oauth2/v2.0/authorize?"
+        + urlencode({
+            'client_id': config['client_id'],
+            'response_type': 'code',
+            'redirect_uri': config['redirect_uri'],
+            'response_mode': 'query',
+            'scope': ' '.join(config['scopes']),
+            'state': state,
+            'prompt': 'select_account',
+        })
+    )
 
 
 def split_display_name(display_name):
@@ -177,6 +213,24 @@ def get_microsoft_user(access_token):
         raise ValidationError({'error': 'Email Microsoft tidak ditemukan pada profil user.'})
 
     return profile, email
+
+
+def get_microsoft_profile_id(profile):
+    return str(profile.get('id') or '').strip()
+
+
+def find_user_for_microsoft_profile(profile, email):
+    microsoft_id = get_microsoft_profile_id(profile)
+    if microsoft_id:
+        linked_user = User.objects.filter(microsoft_id=microsoft_id).first()
+        if linked_user:
+            return linked_user
+
+    return User.objects.filter(
+        Q(email__iexact=email)
+        | Q(username__iexact=email)
+        | Q(microsoft_email__iexact=email)
+    ).first()
 
 
 def is_pdf_upload(file):
@@ -222,20 +276,56 @@ def microsoft_sso_login(request):
         {'nonce': secrets.token_urlsafe(24), 'flow': flow},
         salt=MICROSOFT_OAUTH_STATE_SALT,
     )
-    authorization_url = (
-        f"https://login.microsoftonline.com/{config['tenant_id']}/oauth2/v2.0/authorize?"
-        + urlencode({
-            'client_id': config['client_id'],
-            'response_type': 'code',
-            'redirect_uri': config['redirect_uri'],
-            'response_mode': 'query',
-            'scope': ' '.join(config['scopes']),
-            'state': state,
-            'prompt': 'select_account',
-        })
-    )
+    authorization_url = build_microsoft_authorization_url(config, state)
 
     return redirect(authorization_url)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def microsoft_sso_admin_link(request):
+    if not request.user.is_staff:
+        return Response(
+            {'detail': 'Hanya admin yang dapat menghubungkan akun Microsoft administrator.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    try:
+        config = get_microsoft_sso_config()
+    except ValidationError as error:
+        return Response(
+            {'detail': error.detail.get('error', 'Microsoft SSO belum dikonfigurasi.')},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    state = signing.dumps(
+        {
+            'nonce': secrets.token_urlsafe(24),
+            'flow': MICROSOFT_ADMIN_LINK_FLOW,
+            'user_id': request.user.id,
+        },
+        salt=MICROSOFT_OAUTH_STATE_SALT,
+    )
+
+    return Response({
+        'authorization_url': build_microsoft_authorization_url(config, state),
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def microsoft_sso_admin_unlink(request):
+    if not request.user.is_staff:
+        return Response(
+            {'detail': 'Hanya admin yang dapat memutuskan akun Microsoft administrator.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    request.user.microsoft_id = None
+    request.user.microsoft_email = ''
+    request.user.save(update_fields=['microsoft_id', 'microsoft_email'])
+
+    return Response({'message': 'Koneksi akun Microsoft berhasil diputuskan.'})
 
 
 @api_view(['GET'])
@@ -243,25 +333,30 @@ def microsoft_sso_login(request):
 def microsoft_sso_callback(request):
     flow = 'login'
     error_redirect = microsoft_sso_error_redirect
-    error = request.GET.get('error')
-    if error:
-        return microsoft_sso_error_redirect(request.GET.get('error_description') or error)
-
-    code = request.GET.get('code')
+    state_payload = {}
     state = request.GET.get('state')
 
+    if state:
+        try:
+            state_payload = signing.loads(state, salt=MICROSOFT_OAUTH_STATE_SALT, max_age=600)
+            flow = get_microsoft_flow(state_payload)
+            error_redirect = get_microsoft_error_redirect(flow)
+        except signing.SignatureExpired:
+            return error_redirect('Sesi SSO kedaluwarsa. Silakan coba login ulang.')
+        except signing.BadSignature:
+            return error_redirect('State SSO tidak valid. Silakan coba login ulang.')
+
+    error = request.GET.get('error')
+    if error:
+        return error_redirect(request.GET.get('error_description') or error)
+
+    code = request.GET.get('code')
+
     if not code or not state:
-        return microsoft_sso_error_redirect('Callback Microsoft tidak lengkap.')
+        return error_redirect('Callback Microsoft tidak lengkap.')
 
     try:
-        state_payload = signing.loads(state, salt=MICROSOFT_OAUTH_STATE_SALT, max_age=600)
-        flow = state_payload.get('flow') if state_payload.get('flow') == 'register' else 'login'
-        error_redirect = get_microsoft_error_redirect(flow)
         config = get_microsoft_sso_config()
-    except signing.BadSignature:
-        return error_redirect('State SSO tidak valid. Silakan coba login ulang.')
-    except signing.SignatureExpired:
-        return error_redirect('Sesi SSO kedaluwarsa. Silakan coba login ulang.')
     except ValidationError as error:
         return error_redirect(error.detail.get('error', 'Microsoft SSO belum dikonfigurasi.'))
 
@@ -292,10 +387,39 @@ def microsoft_sso_callback(request):
     except ValidationError as error:
         return error_redirect(error.detail.get('error', 'Profil Microsoft tidak valid.'))
 
-    user = (
-        User.objects.filter(email__iexact=email).first()
-        or User.objects.filter(username__iexact=email).first()
-    )
+    microsoft_id = get_microsoft_profile_id(profile)
+    user = find_user_for_microsoft_profile(profile, email)
+
+    if flow == MICROSOFT_ADMIN_LINK_FLOW:
+        admin_user = User.objects.filter(
+            id=state_payload.get('user_id'),
+            is_staff=True,
+            is_active=True,
+        ).first()
+
+        if not admin_user:
+            return error_redirect('Akun admin untuk integrasi Microsoft tidak ditemukan atau sudah tidak aktif.')
+
+        if not microsoft_id:
+            return error_redirect('ID akun Microsoft tidak ditemukan pada profil Outlook.')
+
+        conflicting_user = User.objects.filter(microsoft_id=microsoft_id).exclude(id=admin_user.id).first()
+        if conflicting_user:
+            return error_redirect('Akun Microsoft tersebut sudah terhubung ke akun portal lain.')
+
+        conflicting_email_user = User.objects.filter(
+            Q(email__iexact=email)
+            | Q(username__iexact=email)
+            | Q(microsoft_email__iexact=email)
+        ).exclude(id=admin_user.id).first()
+        if conflicting_email_user:
+            return error_redirect('Email Microsoft tersebut sudah terhubung ke akun portal lain.')
+
+        admin_user.microsoft_id = microsoft_id
+        admin_user.microsoft_email = email
+        admin_user.save(update_fields=['microsoft_id', 'microsoft_email'])
+
+        return microsoft_admin_link_redirect()
 
     if flow == 'register':
         if user:
@@ -336,6 +460,22 @@ def microsoft_sso_callback(request):
                 'Pendaftaran akun Anda ditolak dan perlu diperbaiki. Silakan cek email kampus, lalu daftar ulang.'
             )
         return microsoft_sso_error_redirect('Akun Anda belum disetujui oleh Admin. Harap tunggu.')
+
+    if user.microsoft_id and user.microsoft_id != microsoft_id:
+        return microsoft_sso_error_redirect(
+            'Akun Microsoft ini tidak sesuai dengan identitas Microsoft yang sudah terhubung ke portal.'
+        )
+
+    if user.is_staff and not user.microsoft_id:
+        return microsoft_sso_error_redirect(
+            'Akun admin belum dihubungkan ke Microsoft. Masuk dengan ID login dan password terlebih dahulu, '
+            'lalu hubungkan Outlook melalui Pengaturan Keamanan.'
+        )
+
+    if microsoft_id and not user.microsoft_id:
+        user.microsoft_id = microsoft_id
+        user.microsoft_email = email
+        user.save(update_fields=['microsoft_id', 'microsoft_email'])
 
     if not user.first_name and profile.get('givenName'):
         user.first_name = profile.get('givenName') or ''
@@ -855,6 +995,10 @@ def register_student(request):
         User.objects.filter(email__iexact=email).first()
         or User.objects.filter(username__iexact=email).first()
     )
+    microsoft_id = str(microsoft_payload.get('microsoft_id') or '').strip()
+
+    if microsoft_id and User.objects.filter(microsoft_id=microsoft_id).exclude(id=getattr(existing_user, 'id', None)).exists():
+        return Response({"error": "Akun Microsoft ini sudah digunakan oleh akun portal lain."}, status=400)
 
     if existing_user and not (
         existing_user.is_mahasiswa
@@ -901,6 +1045,9 @@ def register_student(request):
         user.is_active = False
         user.registration_status = 'pending'
         user.registration_rejection_reason = ''
+        if microsoft_id:
+            user.microsoft_id = microsoft_id
+            user.microsoft_email = email
 
         user.bukti_konsul_file = files['bukti_konsul_file']
         user.sptjm_file = files['sptjm_file']

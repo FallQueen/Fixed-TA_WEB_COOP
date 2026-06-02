@@ -29,6 +29,11 @@ def count_working_days(start_date, end_date):
 # 1. SERIALIZER PROFIL MAHASISWA
 # ==========================================
 class UserProfileSerializer(serializers.ModelSerializer):
+    is_microsoft_connected = serializers.SerializerMethodField()
+
+    def get_is_microsoft_connected(self, obj):
+        return bool(obj.microsoft_id)
+
     class Meta:
         model = User
         fields = [
@@ -36,14 +41,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'nim', 'program_studi', 'angkatan', 'gender', 'phone_number', 
             'cv_file', 'portofolio_file', 'bukti_konsul_file', 'sptjm_file',
             'is_staff', 'is_active', 'date_joined', 'password',
-            'registration_status', 'registration_rejection_reason'
+            'registration_status', 'registration_rejection_reason',
+            'microsoft_email', 'is_microsoft_connected'
         ]
         
         # HAPUS 'username' DARI SINI 👇
         read_only_fields = [
             'email', 'nim', 'program_studi', 'angkatan', 
             'bukti_konsul_file', 'sptjm_file', 'is_staff', 'date_joined',
-            'registration_status', 'registration_rejection_reason'
+            'registration_status', 'registration_rejection_reason',
+            'microsoft_email', 'is_microsoft_connected'
         ]
         
         extra_kwargs = {

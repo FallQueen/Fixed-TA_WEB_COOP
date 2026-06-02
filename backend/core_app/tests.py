@@ -2,8 +2,10 @@ import re
 import shutil
 import tempfile
 from datetime import timedelta
+from unittest.mock import Mock, patch
+from urllib.parse import parse_qs, urlparse
 
-from django.core import mail
+from django.core import mail, signing
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.utils import timezone
@@ -1461,3 +1463,124 @@ class NotificationDeletionTests(APITestCase):
         self.assertEqual(response.data['deleted'], 2)
         self.assertEqual(Notification.objects.filter(student=self.student).count(), 0)
         self.assertEqual(Notification.objects.filter(student=self.other_student).count(), 1)
+
+
+@override_settings(
+    FRONTEND_BASE_URL='http://frontend.test',
+    MICROSOFT_SSO_CLIENT_ID='client-id',
+    MICROSOFT_SSO_TENANT_ID='tenant-id',
+    MICROSOFT_SSO_CLIENT_SECRET='client-secret',
+    MICROSOFT_SSO_REDIRECT_URI='http://backend.test/api/auth/microsoft/callback/',
+    MICROSOFT_SSO_SCOPES=['openid', 'profile', 'email', 'User.Read'],
+)
+class MicrosoftAdminLinkTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username='coop-admin',
+            email='admin@example.com',
+            password='password123',
+            is_staff=True,
+            is_mahasiswa=False,
+        )
+        self.student = User.objects.create_user(
+            username='student@example.com',
+            email='student@example.com',
+            password='password123',
+            is_mahasiswa=True,
+        )
+
+    def build_callback_state(self, flow='login', user_id=None):
+        payload = {'nonce': 'test-nonce', 'flow': flow}
+        if user_id:
+            payload['user_id'] = user_id
+        return signing.dumps(payload, salt='coop.microsoft-sso.state')
+
+    def mock_microsoft_requests(self, microsoft_id='microsoft-coop-id', email='coop@prasetiyamulya.ac.id'):
+        token_response = Mock()
+        token_response.raise_for_status.return_value = None
+        token_response.json.return_value = {'access_token': 'test-access-token'}
+
+        profile_response = Mock()
+        profile_response.raise_for_status.return_value = None
+        profile_response.json.return_value = {
+            'id': microsoft_id,
+            'mail': email,
+            'displayName': 'Unit Co-op',
+        }
+
+        return (
+            patch('core_app.views.requests.post', return_value=token_response),
+            patch('core_app.views.requests.get', return_value=profile_response),
+        )
+
+    def test_only_admin_can_start_microsoft_link(self):
+        self.client.force_authenticate(user=self.student)
+
+        response = self.client.post('/api/auth/microsoft/admin-link/')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_can_start_microsoft_link(self):
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.post('/api/auth/microsoft/admin-link/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        authorization_url = response.data['authorization_url']
+        query = parse_qs(urlparse(authorization_url).query)
+        state_payload = signing.loads(query['state'][0], salt='coop.microsoft-sso.state')
+        self.assertEqual(state_payload['flow'], 'admin_link')
+        self.assertEqual(state_payload['user_id'], self.admin.id)
+
+    def test_admin_link_callback_saves_verified_microsoft_identity(self):
+        state = self.build_callback_state(flow='admin_link', user_id=self.admin.id)
+        post_patch, get_patch = self.mock_microsoft_requests()
+
+        with post_patch, get_patch:
+            response = self.client.get('/api/auth/microsoft/callback/', {'code': 'test-code', 'state': state})
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn('/admin-dashboard?tab=pengaturan&microsoft_linked=1', response.url)
+        self.admin.refresh_from_db()
+        self.assertEqual(self.admin.microsoft_id, 'microsoft-coop-id')
+        self.assertEqual(self.admin.microsoft_email, 'coop@prasetiyamulya.ac.id')
+
+    def test_unlinked_admin_cannot_login_with_email_match_only(self):
+        self.admin.username = 'coop@prasetiyamulya.ac.id'
+        self.admin.email = 'coop@prasetiyamulya.ac.id'
+        self.admin.save(update_fields=['username', 'email'])
+        state = self.build_callback_state()
+        post_patch, get_patch = self.mock_microsoft_requests()
+
+        with post_patch, get_patch:
+            response = self.client.get('/api/auth/microsoft/callback/', {'code': 'test-code', 'state': state})
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn('microsoft_error=', response.url)
+        self.assertFalse(User.objects.get(id=self.admin.id).microsoft_id)
+
+    def test_linked_admin_can_login_with_microsoft(self):
+        self.admin.microsoft_id = 'microsoft-coop-id'
+        self.admin.microsoft_email = 'coop@prasetiyamulya.ac.id'
+        self.admin.save(update_fields=['microsoft_id', 'microsoft_email'])
+        state = self.build_callback_state()
+        post_patch, get_patch = self.mock_microsoft_requests()
+
+        with post_patch, get_patch:
+            response = self.client.get('/api/auth/microsoft/callback/', {'code': 'test-code', 'state': state})
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn('/auth/microsoft/callback?token=', response.url)
+
+    def test_admin_can_unlink_microsoft_identity(self):
+        self.admin.microsoft_id = 'microsoft-coop-id'
+        self.admin.microsoft_email = 'coop@prasetiyamulya.ac.id'
+        self.admin.save(update_fields=['microsoft_id', 'microsoft_email'])
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.post('/api/auth/microsoft/admin-unlink/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.admin.refresh_from_db()
+        self.assertIsNone(self.admin.microsoft_id)
+        self.assertEqual(self.admin.microsoft_email, '')

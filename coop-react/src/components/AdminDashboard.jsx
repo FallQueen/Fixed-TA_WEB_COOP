@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { hitungDurasi } from '../utils/helper';
 import { stemRed } from '../styles/adminstyles';
 import DashboardShell from './adminDashboard/DashboardShell';
@@ -33,6 +33,7 @@ const LOADING_STYLE = {
 
 function AdminDashboard() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     isMobile,
     isSidebarOpen,
@@ -41,6 +42,7 @@ function AdminDashboard() {
     setIsSidebarCollapsed,
   } = useResponsiveSidebar();
   const adminFeedback = useAdminFeedback();
+  const { notify: notifyAdmin } = adminFeedback;
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem('token');
@@ -169,6 +171,9 @@ function AdminDashboard() {
     handleProfileFormChange,
     handleAdminPasswordChange,
     handlePasswordFormChange,
+    handleConnectMicrosoft,
+    handleDisconnectMicrosoft,
+    isUpdatingMicrosoftConnection,
     handleApproveStudent,
     handleRejectStudent,
     handleApproveAllStudents,
@@ -261,6 +266,39 @@ function AdminDashboard() {
   useEffect(() => {
     fetchAdminData();
   }, [fetchAdminData]);
+
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    const microsoftLinked = searchParams.get('microsoft_linked');
+    const microsoftLinkError = searchParams.get('microsoft_link_error');
+
+    if (requestedTab === 'pengaturan') {
+      setActiveTab('pengaturan');
+    }
+
+    if (microsoftLinked === '1') {
+      notifyAdmin({
+        type: 'success',
+        title: 'Outlook Admin Terhubung',
+        message: 'Akun Microsoft berhasil dihubungkan. Login Microsoft untuk admin sekarang sudah aktif.',
+      });
+    }
+
+    if (microsoftLinkError) {
+      notifyAdmin({
+        type: 'danger',
+        title: 'Koneksi Outlook Belum Berhasil',
+        message: microsoftLinkError,
+      });
+    }
+
+    if (microsoftLinked || microsoftLinkError) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('microsoft_linked');
+      nextParams.delete('microsoft_link_error');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [notifyAdmin, searchParams, setActiveTab, setSearchParams]);
 
   useEffect(() => {
     if (!adminData) {
@@ -461,6 +499,10 @@ function AdminDashboard() {
         passwordForm={passwordForm}
         handlePasswordFormChange={handlePasswordFormChange}
         isChangingPassword={isChangingPassword}
+        adminData={adminData}
+        handleConnectMicrosoft={handleConnectMicrosoft}
+        handleDisconnectMicrosoft={handleDisconnectMicrosoft}
+        isUpdatingMicrosoftConnection={isUpdatingMicrosoftConnection}
       />
     ),
   };

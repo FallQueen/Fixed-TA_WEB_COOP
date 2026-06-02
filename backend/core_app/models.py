@@ -3,6 +3,10 @@ from django.contrib.auth.models import AbstractUser
 
 class User(AbstractUser):
     # Field bawaan Django (username, email, password, first_name, last_name) sudah otomatis ada.
+
+    # Identitas Microsoft disimpan terpisah agar login SSO tidak hanya mengandalkan teks email.
+    microsoft_id = models.CharField(max_length=255, null=True, blank=True, unique=True)
+    microsoft_email = models.EmailField(blank=True, default='')
     
     # Field Khusus Mahasiswa Prasmul (Sesuai PDF)
     nim = models.CharField(max_length=20, null=True, blank=True)
