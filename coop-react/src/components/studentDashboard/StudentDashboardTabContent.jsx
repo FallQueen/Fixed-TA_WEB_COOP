@@ -113,6 +113,7 @@ export default function StudentDashboardTabContent({ actions, data, viewState, f
   if (activeTab === 'profil') {
     return (
       <ProfileTab
+        currentPlacement={currentPlacement}
         files={files}
         handleFileChange={handleFileChange}
         handleUpload={handleUpload}

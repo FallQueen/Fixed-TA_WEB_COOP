@@ -102,6 +102,31 @@ const formatNotificationTime = (value) =>
     minute: '2-digit',
   });
 
+const formatPlacementDate = (value) => {
+  if (!value) return '-';
+  const parsedDate = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return parsedDate.toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+};
+
+const getPlacementDurationText = (placement) => {
+  if (!placement?.start_date || !placement?.end_date) {
+    return '-';
+  }
+
+  const workingDays = calculateWorkingDays(placement.start_date, placement.end_date);
+
+  return workingDays > 0 ? `${workingDays} hari kerja` : '-';
+};
+
 const getNotificationMeta = (notificationType) => {
   switch (notificationType) {
     case 'certificate':
@@ -152,6 +177,7 @@ const getNotificationExternalAction = (notification) => {
 };
 
 export function ProfileTab({
+  currentPlacement,
   files,
   handleFileChange,
   handleUpload,
@@ -198,6 +224,37 @@ export function ProfileTab({
           <div>
             <h4 style={{ margin: '0 0 4px 0', color: '#92400e' }}>Sedang Diproses</h4>
             <p style={{ margin: 0, color: '#92400e', fontSize: '13px' }}>Laporan magangmu sedang divalidasi oleh Admin. Fitur evaluasi akan terbuka setelah disetujui.</p>
+          </div>
+        </div>
+      )}
+
+      {currentPlacement?.is_approved && (
+        <div style={{ ...styles.card, marginBottom: '30px', borderTop: '4px solid #003366', backgroundColor: '#ffffff' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', gap: '14px', flexDirection: isMobile ? 'column' : 'row', marginBottom: '18px' }}>
+            <div>
+              <span style={{ display: 'block', color: '#94a3b8', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', marginBottom: '5px' }}>Tempat Magang Aktif</span>
+              <h3 style={{ margin: 0, color: '#003366', fontSize: isMobile ? '19px' : '22px', fontWeight: '900', lineHeight: 1.25 }}>
+                {currentPlacement.company_name}
+              </h3>
+              <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '13px', fontWeight: '700' }}>{currentPlacement.position}</p>
+            </div>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '999px', backgroundColor: '#ecfdf5', color: '#047857', fontSize: '11px', fontWeight: '900', border: '1px solid #bbf7d0' }}>
+              <CheckCircle size={13} /> Aktif Magang
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: '12px' }}>
+            <div style={{ padding: '14px', borderRadius: '10px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }}><Calendar size={13} /> Tanggal Mulai</span>
+              <strong style={{ display: 'block', marginTop: '7px', color: '#0f172a', fontSize: '14px' }}>{formatPlacementDate(currentPlacement.start_date)}</strong>
+            </div>
+            <div style={{ padding: '14px', borderRadius: '10px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }}><Calendar size={13} /> Tanggal Selesai</span>
+              <strong style={{ display: 'block', marginTop: '7px', color: '#0f172a', fontSize: '14px' }}>{formatPlacementDate(currentPlacement.end_date)}</strong>
+            </div>
+            <div style={{ padding: '14px', borderRadius: '10px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1d4ed8', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }}><Clock size={13} /> Durasi Magang</span>
+              <strong style={{ display: 'block', marginTop: '7px', color: '#003366', fontSize: '14px' }}>{getPlacementDurationText(currentPlacement)}</strong>
+            </div>
           </div>
         </div>
       )}
@@ -1601,78 +1658,187 @@ export function SubmissionReportTab({
   uploadedFileLabel,
   waitingEvaluationSubtitle,
 }) {
+  const [selectedFileName, setSelectedFileName] = useState('');
+  const isFinalReport = title.toLowerCase().includes('uas') || title.toLowerCase().includes('akhir');
+  const studentButtonTone = {
+    primary: '#003366',
+    primarySoft: '#e6f0fa',
+    primaryBorder: '#b8cce3',
+    primaryShadow: '0 12px 24px rgba(0, 51, 102, 0.18)',
+  };
+  const reportTone = isFinalReport
+    ? {
+      accent: '#059669',
+      accentDark: '#047857',
+      accentSoft: '#ecfdf5',
+      accentBorder: '#bbf7d0',
+      contrast: '#0f766e',
+      submitShadow: '0 14px 28px rgba(5, 150, 105, 0.24)',
+    }
+    : {
+      accent: '#2563eb',
+      accentDark: '#1d4ed8',
+      accentSoft: '#eff6ff',
+      accentBorder: '#bfdbfe',
+      contrast: '#1e40af',
+      submitShadow: '0 14px 28px rgba(37, 99, 235, 0.22)',
+    };
+  const reportStatusLabel = submittedReport ? 'Sudah terkumpul' : 'Belum terkumpul';
+  const supervisorStatusLabel = evaluation?.is_filled ? 'Evaluasi lengkap' : 'Menunggu supervisor';
+  const fileInputId = `report-file-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+
   return (
     <div className="no-print">
-      <div style={styles.heroBanner}>
-        <h1 style={styles.heroTitle}>{title}</h1>
-        <p style={styles.heroSubtitle}>{submittedDescription}</p>
+      <div style={{ ...styles.heroBanner, position: 'relative', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', gap: '18px' }}>
+          <div>
+            <h1 style={styles.heroTitle}>{title}</h1>
+            <p style={{ ...styles.heroSubtitle, maxWidth: '760px' }}>{submittedDescription}</p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '8px 12px', borderRadius: '999px', backgroundColor: submittedReport ? '#ecfdf5' : '#fff7ed', color: submittedReport ? '#047857' : '#c2410c', fontSize: '11px', fontWeight: '900', border: `1px solid ${submittedReport ? '#bbf7d0' : '#fed7aa'}` }}>
+              {submittedReport ? <CheckCircle size={13} /> : <Clock size={13} />} {reportStatusLabel}
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '8px 12px', borderRadius: '999px', backgroundColor: evaluation?.is_filled ? '#ecfdf5' : '#fffbeb', color: evaluation?.is_filled ? '#047857' : '#b45309', fontSize: '11px', fontWeight: '900', border: `1px solid ${evaluation?.is_filled ? '#bbf7d0' : '#fde68a'}` }}>
+              {evaluation?.is_filled ? <FileCheck size={13} /> : <Clock size={13} />} {supervisorStatusLabel}
+            </span>
+          </div>
+        </div>
       </div>
-      <div style={{ ...styles.card, borderTop: '4px solid #F2A900' }}>
-        {submittedReport && (
-          <div style={{ padding: '20px', backgroundColor: '#e0f2fe', borderRadius: '12px', marginBottom: '25px', border: '1px solid #bae6fd', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? '15px' : '0' }}>
+
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.35fr) minmax(300px, 0.65fr)', gap: '18px', alignItems: 'start' }}>
+        <div style={{ ...styles.card, padding: 0, overflow: 'hidden', borderTop: `4px solid ${reportTone.accent}` }}>
+          <div style={{ padding: isMobile ? '20px' : '24px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#ffffff' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexDirection: isMobile ? 'column' : 'row' }}>
+              <div>
+                <p style={{ margin: '0 0 6px', color: reportTone.contrast, fontSize: '11px', fontWeight: '900', textTransform: 'uppercase' }}>{sectionTitle}</p>
+                <h3 style={{ margin: 0, color: '#0f172a', fontSize: isMobile ? '20px' : '24px', lineHeight: 1.2, fontWeight: '900' }}>
+                  Pengumpulan Dokumen
+                </h3>
+              </div>
+              {submittedReport && (
+                <a href={submittedReport.report_file} target="_blank" rel="noreferrer" className="btn-hover" style={{ ...styles.btnPrimary, backgroundColor: '#ffffff', color: studentButtonTone.primary, border: `1px solid ${studentButtonTone.primaryBorder}`, boxShadow: 'none', textDecoration: 'none', width: isMobile ? '100%' : 'auto' }}>
+                  <Eye size={16} /> Lihat File Terkirim
+                </a>
+              )}
+            </div>
+
+            {submittedReport && (
+              <div style={{ marginTop: '18px', padding: '14px 16px', backgroundColor: reportTone.accentSoft, borderRadius: '12px', border: `1px solid ${reportTone.accentBorder}`, display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <CheckCircle size={20} color={reportTone.accentDark} style={{ flexShrink: 0, marginTop: '1px' }} />
+                <div>
+                  <strong style={{ display: 'block', color: reportTone.accentDark, fontSize: '14px', lineHeight: 1.35 }}>{successTitle}</strong>
+                  <span style={{ color: reportTone.contrast, fontSize: '12px', lineHeight: 1.55 }}>{submittedTitle}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <form onSubmit={handleSubmit} style={{ padding: isMobile ? '20px' : '24px', display: 'grid', gap: '18px' }}>
             <div>
-              <h3 style={{ color: '#0369a1', margin: '0 0 5px 0', display: 'flex', alignItems: 'center', gap: '8px' }}><CheckCircle size={20} /> {successTitle}</h3>
-              <p style={{ margin: 0, color: '#0284c7', fontSize: '14px' }}>{submittedTitle}</p>
+              <label style={{ ...styles.labelStyle, display: 'flex', alignItems: 'center', gap: '7px', color: '#0f172a' }}>
+                <MapPin size={15} color={reportTone.accent} /> Tempat Magang Aktif
+              </label>
+              <select required onChange={(e) => setFormData({ ...formData, placement: e.target.value })} value={formData.placement} className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', border: '1px solid #dbe4ef', minHeight: '48px', fontWeight: '700' }}>
+                <option value="">Pilih tempat magang</option>
+                {approvedPlacements.map((placement) => <option key={placement.id} value={placement.id}>{getPlacementOptionLabel(placement)}</option>)}
+              </select>
             </div>
-            <a href={submittedReport.report_file} target="_blank" rel="noreferrer" className="btn-hover" style={{ ...styles.btnPrimary, backgroundColor: '#0284c7', textDecoration: 'none' }}>
-              <Eye size={16} /> Lihat File Terkirim
-            </a>
-          </div>
-        )}
-        {evaluation?.is_filled ? (
-          <div style={{ padding: '20px', backgroundColor: '#dcfce7', color: '#166534', borderRadius: '12px', marginBottom: '25px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <CheckCircle size={28} />
-            <div><strong style={{ display: 'block', fontSize: '16px' }}>{evaluationSuccessTitle}</strong><span style={{ fontSize: '13px' }}>{evaluationSuccessSubtitle}</span></div>
-          </div>
-        ) : (
-          <div style={{ padding: '20px', backgroundColor: '#fffbeb', color: '#b45309', borderRadius: '12px', marginBottom: '25px', border: '1px solid #fde68a', display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'space-between', gap: isMobile ? '15px' : '0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-              <Clock size={28} />
-              <div><strong style={{ display: 'block', fontSize: '16px' }}>Menunggu Penilaian Supervisor</strong><span style={{ fontSize: '13px' }}>{waitingEvaluationSubtitle}</span></div>
+
+            <div>
+              <label style={{ ...styles.labelStyle, display: 'flex', alignItems: 'center', gap: '7px', color: '#0f172a' }}>
+                <UploadCloud size={15} color={reportTone.accent} /> {fileLabel}
+              </label>
+              <label htmlFor={fileInputId} className="btn-hover" style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: 'space-between', gap: '16px', padding: '20px', backgroundColor: '#f8fafc', border: `2px dashed ${selectedFileName ? reportTone.accent : '#cbd5e1'}`, borderRadius: '12px', cursor: 'pointer', transition: 'border-color 0.2s ease, background-color 0.2s ease' }}>
+                <input
+                  id={fileInputId}
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  required
+                  onChange={(e) => {
+                    const nextFile = e.target.files?.[0] || null;
+                    setSelectedFileName(nextFile?.name || '');
+                    setFile(nextFile);
+                  }}
+                  style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: '1px', height: '1px' }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, width: '100%' }}>
+                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: selectedFileName ? reportTone.accentSoft : '#eef2f7', color: selectedFileName ? reportTone.accentDark : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {selectedFileName ? <FileCheck size={22} /> : <Folder size={22} />}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, color: '#0f172a', fontSize: '14px', fontWeight: '900', overflowWrap: 'anywhere' }}>
+                      {selectedFileName || 'Pilih file laporan'}
+                    </p>
+                    <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '12px', lineHeight: 1.45 }}>
+                      PDF, DOC, atau DOCX
+                    </p>
+                  </div>
+                </div>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px', width: isMobile ? '100%' : 'auto', padding: '10px 14px', borderRadius: '10px', backgroundColor: studentButtonTone.primarySoft, border: `1px solid ${studentButtonTone.primaryBorder}`, color: studentButtonTone.primary, fontSize: '12px', fontWeight: '900', flexShrink: 0 }}>
+                  <UploadCloud size={14} /> Pilih File
+                </span>
+              </label>
             </div>
-            <a href={reminderLink} target="_blank" rel="noreferrer" className="btn-hover" style={{ padding: '10px 16px', backgroundColor: '#25D366', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px', width: isMobile ? '100%' : 'auto', justifyContent: 'center' }}>
-              <Send size={16} /> Hubungi via WA
-            </a>
-          </div>
-        )}
-        {templateFile && (
-          <div style={{ padding: '20px', backgroundColor: '#f8fafc', borderRadius: '12px', marginBottom: '30px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', border: '1px dashed #cbd5e1', gap: isMobile ? '15px' : '0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-              <div style={{ width: '40px', height: '40px', backgroundColor: '#e6f0fa', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#003366' }}><Download size={20} /></div>
-              <div><h4 style={{ margin: '0 0 4px 0', color: '#003366', fontSize: '15px', fontWeight: '700' }}>{templateTitle}</h4><p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Wajib gunakan format resmi dari Admin Co-op.</p></div>
+
+            <div>
+              <label style={{ ...styles.labelStyle, display: 'flex', alignItems: 'center', gap: '7px', color: '#0f172a' }}>
+                <Edit3 size={15} color={reportTone.accent} /> {uploadButtonLabel}
+              </label>
+              <textarea rows="4" onChange={(e) => setFormData({ ...formData, description: e.target.value })} value={formData.description} placeholder={uploadedFileLabel} className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', border: '1px solid #dbe4ef', resize: 'vertical', lineHeight: 1.65, minHeight: '112px' }} />
             </div>
-            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '10px', width: isMobile ? '100%' : 'auto' }}>
-              <button onClick={(e) => { e.preventDefault(); setPreviewDoc(templateFile); }} className="btn-hover" style={{ ...styles.btnPrimary, backgroundColor: '#fff', color: '#003366', border: '1px solid #cbd5e1' }}><Eye size={16} /> Preview</button>
-              <a href={templateFile} target="_blank" rel="noreferrer" className="btn-hover" style={{ ...styles.btnPrimary, backgroundColor: '#003366', textDecoration: 'none', display: 'flex', textAlign: 'center' }}><Download size={16} /> Download File</a>
-            </div>
-          </div>
-        )}
-        <h3 style={{ margin: '0 0 20px 0', color: '#003366', fontSize: '18px', fontWeight: '700', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>{sectionTitle}</h3>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div>
-            <label style={styles.labelStyle}>Tempat Magang Aktif</label>
-            <select required onChange={(e) => setFormData({ ...formData, placement: e.target.value })} value={formData.placement} className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc' }}>
-              <option value="">-- Pilih Tempat Magang --</option>
-              {approvedPlacements.map((placement) => <option key={placement.id} value={placement.id}>{getPlacementOptionLabel(placement)}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={styles.labelStyle}>{fileLabel}</label>
-            <div style={{ padding: '20px', backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '8px' }}>
-              <input type="file" accept=".pdf,.doc,.docx" required onChange={(e) => setFile(e.target.files[0])} style={{ width: '100%', cursor: 'pointer', fontFamily: '"Montserrat", sans-serif' }} />
-            </div>
-          </div>
-          <div>
-            <label style={styles.labelStyle}>{uploadButtonLabel}</label>
-            <textarea rows="3" onChange={(e) => setFormData({ ...formData, description: e.target.value })} value={formData.description} placeholder={uploadedFileLabel} className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', resize: 'vertical' }} />
-          </div>
-          <div style={{ marginTop: '10px', textAlign: isMobile ? 'center' : 'right' }}>
-            <button type="submit" disabled={submitting} className="btn-hover" style={{ ...styles.btnPrimary, backgroundColor: '#003366', padding: '14px 30px', fontSize: '15px', width: isMobile ? '100%' : 'auto' }}>
-              {submitting ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+
+            <button type="submit" disabled={submitting} className="btn-hover" style={{ ...styles.btnPrimary, width: '100%', minHeight: '54px', padding: '15px 20px', borderRadius: '12px', backgroundColor: submitting ? '#94a3b8' : studentButtonTone.primary, boxShadow: submitting ? 'none' : studentButtonTone.primaryShadow, fontSize: '15px', fontWeight: '900' }}>
+              {submitting ? <Loader2 size={17} className="animate-spin" /> : <UploadCloud size={17} />}
               {submitting ? 'Mengupload Dokumen...' : submitLabel}
             </button>
+          </form>
+        </div>
+
+        <div style={{ display: 'grid', gap: '18px' }}>
+          <div style={{ ...styles.card, padding: '20px', border: `1px solid ${evaluation?.is_filled ? '#bbf7d0' : '#fde68a'}`, backgroundColor: evaluation?.is_filled ? '#f0fdf4' : '#fffbeb' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '13px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#ffffff', color: evaluation?.is_filled ? '#15803d' : '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${evaluation?.is_filled ? '#bbf7d0' : '#fde68a'}` }}>
+                {evaluation?.is_filled ? <CheckCircle size={21} /> : <Clock size={21} />}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <h3 style={{ margin: 0, color: evaluation?.is_filled ? '#14532d' : '#92400e', fontSize: '15px', lineHeight: 1.35, fontWeight: '900' }}>
+                  {evaluation?.is_filled ? evaluationSuccessTitle : 'Menunggu Penilaian Supervisor'}
+                </h3>
+                <p style={{ margin: '6px 0 0', color: evaluation?.is_filled ? '#166534' : '#92400e', fontSize: '12px', lineHeight: 1.55, fontWeight: '650' }}>
+                  {evaluation?.is_filled ? evaluationSuccessSubtitle : waitingEvaluationSubtitle}
+                </p>
+              </div>
+            </div>
+            {!evaluation?.is_filled && (
+              <a href={reminderLink} target="_blank" rel="noreferrer" className="btn-hover" style={{ marginTop: '16px', padding: '12px 14px', backgroundColor: '#25D366', color: '#ffffff', textDecoration: 'none', borderRadius: '10px', fontSize: '13px', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', width: '100%' }}>
+                <Send size={15} /> Hubungi via WA
+              </a>
+            )}
           </div>
-        </form>
+
+          {templateFile && (
+            <div style={{ ...styles.card, padding: '20px', border: '1px solid #dbe4ef', backgroundColor: '#ffffff' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '13px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: reportTone.accentSoft, color: reportTone.accentDark, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Download size={20} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <h3 style={{ margin: 0, color: '#0f172a', fontSize: '15px', lineHeight: 1.35, fontWeight: '900' }}>{templateTitle}</h3>
+                  <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '12px', lineHeight: 1.55 }}>Format resmi dari Admin Co-op.</p>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '10px', marginTop: '16px' }}>
+                <button type="button" onClick={(e) => { e.preventDefault(); setPreviewDoc(templateFile); }} className="btn-hover" style={{ ...styles.btnPrimary, backgroundColor: '#ffffff', color: studentButtonTone.primary, border: `1px solid ${studentButtonTone.primaryBorder}`, boxShadow: 'none', width: '100%' }}>
+                  <Eye size={15} /> Preview
+                </button>
+                <a href={templateFile} target="_blank" rel="noreferrer" className="btn-hover" style={{ ...styles.btnPrimary, backgroundColor: studentButtonTone.primary, boxShadow: studentButtonTone.primaryShadow, textDecoration: 'none', display: 'flex', textAlign: 'center', width: '100%' }}>
+                  <Download size={15} /> Download
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

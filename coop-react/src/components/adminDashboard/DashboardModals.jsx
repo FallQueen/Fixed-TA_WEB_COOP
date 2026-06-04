@@ -1,4 +1,5 @@
-import { Activity, Building2, CheckCircle, ChevronDown, Download, Edit2, FileText, History, Key, Link2, Mail, Send, Trash2, UserRound, Users, X } from 'lucide-react';
+import { useState } from 'react';
+import { Activity, Building2, CheckCircle, ChevronDown, Download, Edit2, Eye, FileText, History, Key, Link2, Mail, Send, Trash2, UserRound, Users, X } from 'lucide-react';
 import { stemRed } from '../../styles/adminstyles';
 import { MIN_INTERNSHIP_WORKING_DAYS, calculateWorkingDays } from '../constants';
 import { CERTIFICATE_GRADE_OPTIONS } from './constants';
@@ -74,6 +75,7 @@ function DashboardModals({
   // [TAMBAHAN BARU]: Kita butuh array placements untuk melihat histori
   placements, 
 }) {
+  const [adminPreviewDoc, setAdminPreviewDoc] = useState(null);
   
   // [TAMBAHAN BARU]: Logika memisahkan histori magang
   let historyPlacements = [];
@@ -116,9 +118,73 @@ function DashboardModals({
     : placementApprovalWorkingDays;
   const canApprovePlacement = !placementToApprove
     || placementApprovalTotalWorkingDays >= MIN_INTERNSHIP_WORKING_DAYS;
+  const renderDocumentActions = (url, {
+    previewLabel = 'Preview',
+    downloadLabel = 'Unduh',
+    accent = stemRed,
+  } = {}) => {
+    if (!url) return null;
+
+    return (
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: isMobile ? 'stretch' : 'flex-end', width: isMobile ? '100%' : 'auto' }}>
+        <button
+          type="button"
+          className="btn-hover"
+          onClick={() => setAdminPreviewDoc({ url, name: getDocumentName(url) || 'Dokumen mahasiswa' })}
+          style={{ ...styles.linkDoc, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', backgroundColor: '#ffffff', borderColor: '#cbd5e1', color: '#334155', width: isMobile ? '100%' : 'auto' }}
+        >
+          <Eye size={12} /> {previewLabel}
+        </button>
+        <a
+          className="btn-hover"
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          download
+          style={{ ...styles.linkDoc, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', backgroundColor: accent, borderColor: accent, color: '#ffffff', textDecoration: 'none', width: isMobile ? '100%' : 'auto' }}
+        >
+          <Download size={12} /> {downloadLabel}
+        </a>
+      </div>
+    );
+  };
 
   return (
     <>
+      {adminPreviewDoc && (
+        <div style={{ ...styles.modalOverlay, zIndex: 1200 }}>
+          <div style={{ ...styles.modalContent, maxWidth: '980px', width: isMobile ? '94vw' : '86vw', height: isMobile ? '86vh' : '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={styles.modalHeader}>
+              <div style={{ minWidth: 0 }}>
+                <h2 style={{ margin: 0, color: stemRed, fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Eye size={19} /> Preview Dokumen
+                </h2>
+                <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: '12px', fontWeight: '700', overflowWrap: 'anywhere' }}>
+                  {adminPreviewDoc.name}
+                </p>
+              </div>
+              <button type="button" onClick={() => setAdminPreviewDoc(null)} style={styles.closeBtn} aria-label="Tutup preview dokumen">
+                <X size={22} />
+              </button>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}>
+              <iframe src={adminPreviewDoc.url} title="Preview dokumen mahasiswa" style={{ width: '100%', height: '100%', border: 'none', backgroundColor: '#ffffff' }} />
+            </div>
+            <div style={{ ...styles.modalFooter, justifyContent: 'space-between', backgroundColor: '#ffffff' }}>
+              <p style={{ margin: 0, color: '#64748b', fontSize: '12px', lineHeight: 1.5, maxWidth: '560px' }}>
+                Jika dokumen Word tidak tampil di preview browser, gunakan tombol Unduh.
+              </p>
+              <div style={{ display: 'flex', gap: '10px', width: isMobile ? '100%' : 'auto', flexDirection: isMobile ? 'column' : 'row' }}>
+                <button type="button" className="btn-hover" onClick={() => setAdminPreviewDoc(null)} style={{ ...styles.btnPrimary, backgroundColor: '#94a3b8', width: isMobile ? '100%' : 'auto' }}>Tutup</button>
+                <a className="btn-hover" href={adminPreviewDoc.url} target="_blank" rel="noreferrer" download style={{ ...styles.btnPrimary, backgroundColor: stemRed, textDecoration: 'none', width: isMobile ? '100%' : 'auto' }}>
+                  <Download size={15} /> Unduh Dokumen
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ... MODAL EDIT STUDENT TETAP SAMA ... */}
       {editingStudent && (
         <div style={styles.modalOverlay}>
@@ -228,7 +294,11 @@ function DashboardModals({
                       <p style={{ margin: 0, fontSize: '12px', color: '#0284c7' }}>Dokumen Wajib</p>
                     </div>
                     {selectedApplication.student.cv_file ? (
-                      <a className="btn-hover" href={selectedApplication.student.cv_file} target="_blank" rel="noreferrer" style={{ ...styles.btnPrimary, padding: '10px 15px', textDecoration: 'none', backgroundColor: '#0284c7' }}><Download size={14} /> Download</a>
+                      renderDocumentActions(selectedApplication.student.cv_file, {
+                        previewLabel: 'Preview',
+                        downloadLabel: 'Unduh',
+                        accent: '#0284c7',
+                      })
                     ) : (
                       <span style={{ fontSize: '13px', color: '#dc2626', fontWeight: 'bold' }}>Kosong</span>
                     )}
@@ -240,7 +310,11 @@ function DashboardModals({
                       <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>Dokumen Opsional</p>
                     </div>
                     {selectedApplication.student.portofolio_file ? (
-                      <a className="btn-hover" href={selectedApplication.student.portofolio_file} target="_blank" rel="noreferrer" style={{ ...styles.btnPrimary, backgroundColor: '#64748b', padding: '10px 15px', textDecoration: 'none' }}><Download size={14} /> Download</a>
+                      renderDocumentActions(selectedApplication.student.portofolio_file, {
+                        previewLabel: 'Preview',
+                        downloadLabel: 'Unduh',
+                        accent: '#64748b',
+                      })
                     ) : (
                       <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Tidak Ada Lampiran</span>
                     )}
@@ -342,9 +416,13 @@ function DashboardModals({
               {/* TOMBOL LOA */}
               <div style={{ marginTop: '20px', padding: '25px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '2px dashed #cbd5e1', textAlign: 'center' }}>
                 <h4 style={{ margin: '0 0 15px 0', color: '#0f172a' }}>Bukti Letter of Acceptance (LoA)</h4>
-                <a className="btn-hover" href={placementToApprove.placement.acceptance_letter} target="_blank" rel="noreferrer" style={{ ...styles.btnPrimary, backgroundColor: stemRed, textDecoration: 'none', display: 'inline-flex', padding: '14px 25px' }}>
-                  <Download size={18} /> Buka Dokumen Surat Terima Magang
-                </a>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  {renderDocumentActions(placementToApprove.placement.acceptance_letter, {
+                    previewLabel: 'Preview LoA',
+                    downloadLabel: 'Unduh LoA',
+                    accent: stemRed,
+                  })}
+                </div>
               </div>
 
               {/* [TAMBAHAN BARU]: BAGIAN HISTORI MAGANG */}
@@ -490,9 +568,11 @@ function DashboardModals({
                         <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#334155', fontWeight: '600', wordBreak: 'break-word' }}>
                           {getDocumentName(selectedDetail.student.bukti_konsul_file)}
                         </p>
-                        <a className="btn-hover" href={selectedDetail.student.bukti_konsul_file} target="_blank" rel="noreferrer" style={{ ...styles.linkDoc, display: 'inline-flex' }}>
-                          <Download size={12} /> Buka Bukti Konsul
-                        </a>
+                        {renderDocumentActions(selectedDetail.student.bukti_konsul_file, {
+                          previewLabel: 'Preview',
+                          downloadLabel: 'Unduh',
+                          accent: stemRed,
+                        })}
                       </>
                     ) : (
                       <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8', fontStyle: 'italic' }}>Dokumen belum tersedia.</p>
@@ -508,9 +588,11 @@ function DashboardModals({
                         <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#334155', fontWeight: '600', wordBreak: 'break-word' }}>
                           {getDocumentName(selectedDetail.student.sptjm_file)}
                         </p>
-                        <a className="btn-hover" href={selectedDetail.student.sptjm_file} target="_blank" rel="noreferrer" style={{ ...styles.linkDoc, display: 'inline-flex' }}>
-                          <Download size={12} /> Buka SPTJM
-                        </a>
+                        {renderDocumentActions(selectedDetail.student.sptjm_file, {
+                          previewLabel: 'Preview',
+                          downloadLabel: 'Unduh',
+                          accent: stemRed,
+                        })}
                       </>
                     ) : (
                       <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8', fontStyle: 'italic' }}>Dokumen belum tersedia.</p>
@@ -644,7 +726,11 @@ function DashboardModals({
                           <CheckCircle size={16} /> Berkas Tersedia
                         </span>
                         {utsSourceText && <span style={{ fontSize: '12px', color: '#475569', fontWeight: '700' }}>{utsSourceText}</span>}
-                        <a className="btn-hover" href={selectedDetail.mhsUts.report_file} target="_blank" rel="noreferrer" style={{ ...styles.linkDoc, backgroundColor: 'white', borderColor: '#93c5fd', color: '#1d4ed8' }}><Download size={12} /> Unduh PDF</a>
+                        {renderDocumentActions(selectedDetail.mhsUts.report_file, {
+                          previewLabel: 'Preview',
+                          downloadLabel: 'Unduh',
+                          accent: '#1d4ed8',
+                        })}
                       </div>
                       {selectedDetail.mhsUts.description && (
                         <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #bfdbfe' }}>
@@ -665,10 +751,14 @@ function DashboardModals({
 
                   <h4 style={{ color: stemRed, marginTop: '30px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px', fontSize: '16px' }}>Laporan Tugas Akhir (UAS)</h4>
                   {selectedDetail.mhsFinal ? (
-                    <div style={{ backgroundColor: '#f0fdf4', padding: '20px', borderRadius: '8px', border: '1px solid #bbf7d0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ backgroundColor: '#f0fdf4', padding: '20px', borderRadius: '8px', border: '1px solid #bbf7d0', display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', gap: '12px', flexDirection: isMobile ? 'column' : 'row' }}>
                       <span style={{ color: '#166534', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle size={16} /> Berkas Tersedia</span>
                       {finalSourceText && <span style={{ fontSize: '12px', color: '#475569', fontWeight: '700' }}>{finalSourceText}</span>}
-                      <a className="btn-hover" href={selectedDetail.mhsFinal.report_file} target="_blank" rel="noreferrer" style={{ ...styles.linkDoc, backgroundColor: 'white', borderColor: '#86efac', color: '#166534' }}><Download size={12} /> Unduh PDF</a>
+                      {renderDocumentActions(selectedDetail.mhsFinal.report_file, {
+                        previewLabel: 'Preview',
+                        downloadLabel: 'Unduh',
+                        accent: '#166534',
+                      })}
                     </div>
                   ) : (
                     <div style={{ padding: '20px', backgroundColor: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca' }}>
