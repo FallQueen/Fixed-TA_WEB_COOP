@@ -9,10 +9,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.docker.txt ./
+COPY backend/requirements.docker.txt ./
 RUN pip install --no-cache-dir -r requirements.docker.txt
 
-COPY . .
+COPY backend/ ./
 
 RUN chmod +x /app/entrypoint.sh
 

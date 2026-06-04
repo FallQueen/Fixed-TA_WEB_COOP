@@ -1,11 +1,11 @@
 services:
   backend:
     build:
-      context: ../backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: docker/backend.Dockerfile
     restart: unless-stopped
     env_file:
-      - ../backend/.env
+      - ./backend/.env
     volumes:
       - /mnt/coop/backend/media:/app/media
       - /mnt/coop/backend/staticfiles:/app/staticfiles
@@ -13,7 +13,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/frontend.Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-/api}
         VITE_SSO_API_URL: ${VITE_SSO_API_URL:-}
