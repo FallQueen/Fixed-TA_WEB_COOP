@@ -16,6 +16,18 @@ import { useAdminFeedback } from './adminDashboard/hooks/useAdminFeedback.js';
 import { Loader2, Menu } from 'lucide-react';
 
 const GRADUATED_STUDENT_TABS = ['profil', 'notifikasi', 'sertifikat', 'pengaturan'];
+const STUDENT_TAB_LABELS = {
+  profil: 'Profil & Dokumen',
+  notifikasi: 'Notifikasi',
+  lowongan: 'Bursa Magang',
+  lapor: 'Input Data Magang',
+  lapor_mingguan: 'Progress Mingguan',
+  laporan_bulanan: 'Laporan Bulanan',
+  laporan_uts: 'Laporan UTS',
+  laporan_akhir: 'Laporan Akhir',
+  sertifikat: 'Sertifikat',
+  pengaturan: 'Keamanan Akun',
+};
 
 function StudentDashboard() {
   const navigate = useNavigate();
@@ -152,10 +164,18 @@ function StudentDashboard() {
             <button
               onClick={() => viewState.setIsSidebarOpen(true)}
               style={viewState.styles.hamburgerBtn}
+              aria-label="Buka menu mahasiswa"
             >
               <Menu size={20} />
             </button>
-            <h3 style={{ margin: 0, color: '#003366', fontSize: '18px', fontWeight: '700' }}>Portal Co-op</h3>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'block', color: '#94a3b8', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.7px' }}>
+                Portal Mahasiswa
+              </span>
+              <h3 style={{ margin: '3px 0 0', color: '#003366', fontSize: '16px', lineHeight: 1.25, fontWeight: '900', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {STUDENT_TAB_LABELS[viewState.activeTab] || 'Portal Co-op'}
+              </h3>
+            </div>
           </div>
         )}
 

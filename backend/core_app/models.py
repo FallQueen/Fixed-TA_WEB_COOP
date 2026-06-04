@@ -55,6 +55,11 @@ class Vacancy(models.Model):
     
     # [BARU] Field untuk link lamaran eksternal (JobStreet, LinkedIn, form perusahaan, dll)
     external_apply_link = models.URLField(max_length=500, null=True, blank=True)
+
+    # Kontak supervisor/HRD untuk lowongan internal. Jika kosong, frontend memakai kontak Admin Co-op.
+    supervisor_name = models.CharField(max_length=255, blank=True, default='')
+    supervisor_email = models.EmailField(blank=True, default='')
+    supervisor_phone = models.CharField(max_length=20, blank=True, default='')
     
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -70,6 +75,8 @@ class Application(models.Model):
     
     # [BARU] Field untuk menyimpan pesan tambahan dari mahasiswa
     cover_letter = models.TextField(blank=True, null=True)
+    internship_start_date = models.DateField(null=True, blank=True)
+    internship_end_date = models.DateField(null=True, blank=True)
     
     # [UPDATE] Status disesuaikan dengan alur Admin Dashboard
     STATUS_CHOICES = [

@@ -77,6 +77,42 @@ class VacancySerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ApplicationSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        request = self.context.get('request')
+        is_student_create = (
+            request
+            and request.method == 'POST'
+            and not getattr(request.user, 'is_staff', False)
+        )
+        start_date = attrs.get('internship_start_date') or getattr(self.instance, 'internship_start_date', None)
+        end_date = attrs.get('internship_end_date') or getattr(self.instance, 'internship_end_date', None)
+
+        if is_student_create:
+            errors = {}
+            if not start_date:
+                errors['internship_start_date'] = 'Tanggal mulai magang wajib diisi.'
+            if not end_date:
+                errors['internship_end_date'] = 'Tanggal selesai magang wajib diisi.'
+            if errors:
+                raise serializers.ValidationError(errors)
+
+        if start_date or end_date:
+            if not start_date or not end_date:
+                raise serializers.ValidationError({
+                    'internship_end_date': 'Tanggal mulai dan tanggal selesai magang harus diisi lengkap.',
+                })
+            if end_date < start_date:
+                raise serializers.ValidationError({
+                    'internship_end_date': 'Tanggal selesai magang tidak boleh sebelum tanggal mulai.',
+                })
+            working_days = count_working_days(start_date, end_date)
+            if working_days < MIN_INTERNSHIP_WORKING_DAYS:
+                raise serializers.ValidationError({
+                    'internship_end_date': f'Durasi magang minimal {MIN_INTERNSHIP_WORKING_DAYS} hari kerja. Durasi yang dipilih baru {working_days} hari kerja.',
+                })
+
+        return attrs
+
     class Meta:
         model = Application
         fields = '__all__'

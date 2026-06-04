@@ -137,6 +137,7 @@ export default function useStudentActions({
         username: profileForm.username.trim(),
         first_name: profileForm.first_name,
         last_name: profileForm.last_name,
+        phone_number: profileForm.phone_number,
       });
 
       notify({ type: 'success', title: 'Profil Admin Diperbarui', message: 'ID login dan profil admin berhasil disimpan.' });

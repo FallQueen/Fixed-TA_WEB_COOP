@@ -12,6 +12,18 @@ export const GLOBAL_STYLES = `
   .animate-spin { animation: spin 1s linear infinite; }
   .btn-hover:hover { opacity: 0.9; transform: scale(0.98); }
   .input-focus:focus { border-color: #003366 !important; box-shadow: 0 0 0 3px rgba(0, 51, 102, 0.1) !important; }
+  .responsive-table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .mobile-safe-text { overflow-wrap: anywhere; }
+  @media (max-width: 768px) {
+    input, select, textarea { font-size: 16px !important; }
+    .job-card:hover { transform: none; }
+    .job-card { border-radius: 14px; }
+    .job-card-header { padding: 16px; }
+    .job-card-body { padding: 16px; }
+    .timeline-item { padding-left: 24px; margin-bottom: 18px; }
+    .timeline-item::before { bottom: -18px; }
+    .btn-hover:hover { transform: none; }
+  }
   @media print {
     body * { visibility: hidden; }
     .printable-certificate, .printable-certificate * { visibility: visible; }
@@ -148,25 +160,34 @@ export const getDashboardStyles = (isMobile, isSidebarOpen, isSidebarCollapsed) 
   },
   mainContent: {
     flex: 1,
-    padding: isMobile ? '20px 15px' : '40px',
+    padding: isMobile ? '10px 10px max(20px, env(safe-area-inset-bottom))' : '40px',
     overflowY: 'auto',
+    overflowX: 'hidden',
     width: '100%',
+    minWidth: 0,
+    backgroundColor: isMobile ? '#eef2f7' : '#f8fafc',
   },
   mobileHeader: {
     display: 'flex',
     alignItems: 'center',
-    gap: '15px',
-    marginBottom: '20px',
+    gap: '12px',
+    marginBottom: '10px',
     backgroundColor: 'white',
-    padding: '15px',
-    borderRadius: '12px',
-    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+    padding: '10px 12px',
+    borderRadius: '14px',
+    border: '1px solid #e2e8f0',
+    boxShadow: '0 10px 24px rgba(15, 23, 42, 0.08)',
+    position: 'sticky',
+    top: 0,
+    zIndex: 60,
   },
   hamburgerBtn: {
     background: 'none',
     border: '1px solid #e2e8f0',
-    borderRadius: '8px',
-    padding: '8px 12px',
+    borderRadius: '11px',
+    padding: 0,
+    width: '42px',
+    height: '42px',
     cursor: 'pointer',
     backgroundColor: '#f8fafc',
     color: '#003366',
@@ -176,44 +197,49 @@ export const getDashboardStyles = (isMobile, isSidebarOpen, isSidebarCollapsed) 
   },
   heroBanner: {
     backgroundColor: '#003366',
-    padding: isMobile ? '20px' : '30px',
-    borderRadius: '12px',
-    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-    marginBottom: '30px',
+    padding: isMobile ? '18px 16px' : '30px',
+    borderRadius: isMobile ? '16px' : '12px',
+    boxShadow: isMobile ? '0 14px 30px rgba(0, 51, 102, 0.16)' : '0 4px 6px -1px rgba(0,0,0,0.05)',
+    marginBottom: isMobile ? '14px' : '30px',
     color: 'white',
+    overflow: 'hidden',
   },
   heroTitle: {
     margin: 0,
-    fontSize: isMobile ? '22px' : '28px',
+    fontSize: isMobile ? '21px' : '28px',
     color: '#fff',
-    fontWeight: '700',
+    fontWeight: '800',
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
+    lineHeight: 1.2,
+    overflowWrap: 'anywhere',
   },
   heroSubtitle: {
     margin: '8px 0 0 0',
     color: '#e2e8f0',
     fontSize: isMobile ? '13px' : '15px',
+    lineHeight: 1.55,
   },
   headerCard: {
-    backgroundColor: 'white',
-    padding: '30px',
-    borderRadius: '12px',
-    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-    marginBottom: '30px',
-  },
-  grid2: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-    gap: '20px',
-  },
-  card: {
     backgroundColor: 'white',
     padding: isMobile ? '20px' : '30px',
     borderRadius: '12px',
     boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+    marginBottom: isMobile ? '18px' : '30px',
+  },
+  grid2: {
+    display: 'grid',
+    gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(280px, 1fr))',
+    gap: isMobile ? '14px' : '20px',
+  },
+  card: {
+    backgroundColor: 'white',
+    padding: isMobile ? '16px' : '30px',
+    borderRadius: isMobile ? '14px' : '12px',
+    boxShadow: isMobile ? '0 10px 24px rgba(15, 23, 42, 0.055)' : '0 4px 6px -1px rgba(0,0,0,0.05)',
     border: '1px solid #e2e8f0',
+    minWidth: 0,
   },
   textLabel: {
     fontSize: '12px',
@@ -229,9 +255,9 @@ export const getDashboardStyles = (isMobile, isSidebarOpen, isSidebarCollapsed) 
     fontWeight: '600',
   },
   sectionTitle: {
-    margin: '25px 0 15px 0',
+    margin: isMobile ? '20px 0 12px 0' : '25px 0 15px 0',
     color: '#003366',
-    fontSize: '16px',
+    fontSize: isMobile ? '15px' : '16px',
     borderBottom: '1px solid #e2e8f0',
     paddingBottom: '8px',
     fontWeight: '700',
@@ -242,7 +268,7 @@ export const getDashboardStyles = (isMobile, isSidebarOpen, isSidebarCollapsed) 
     border: '1px solid #cbd5e1',
     borderRadius: '8px',
     boxSizing: 'border-box',
-    fontSize: '14px',
+    fontSize: isMobile ? '16px' : '14px',
     outline: 'none',
     transition: 'all 0.2s',
     fontFamily: '"Montserrat", sans-serif',
@@ -254,7 +280,7 @@ export const getDashboardStyles = (isMobile, isSidebarOpen, isSidebarCollapsed) 
     borderRadius: '8px',
     backgroundColor: '#f8fafc',
     marginTop: '5px',
-    fontSize: '13px',
+    fontSize: isMobile ? '16px' : '13px',
     cursor: 'pointer',
     fontFamily: '"Montserrat", sans-serif',
   },
@@ -284,24 +310,24 @@ export const getDashboardStyles = (isMobile, isSidebarOpen, isSidebarCollapsed) 
     color: '#334155',
   },
   alertWarning: {
-    padding: '15px 20px',
+    padding: isMobile ? '14px' : '15px 20px',
     backgroundColor: '#fffbeb',
     borderLeft: '4px solid #F2A900',
     borderRadius: '8px',
-    marginBottom: '25px',
+    marginBottom: isMobile ? '14px' : '25px',
     display: 'flex',
-    gap: '15px',
-    alignItems: 'center',
+    gap: isMobile ? '11px' : '15px',
+    alignItems: 'flex-start',
   },
   alertDanger: {
-    padding: '15px 20px',
+    padding: isMobile ? '14px' : '15px 20px',
     backgroundColor: '#fee2e2',
     borderLeft: '4px solid #ef4444',
     borderRadius: '8px',
-    marginBottom: '25px',
+    marginBottom: isMobile ? '14px' : '25px',
     display: 'flex',
-    gap: '15px',
-    alignItems: 'center',
+    gap: isMobile ? '11px' : '15px',
+    alignItems: 'flex-start',
   },
   badgeSuccess: {
     backgroundColor: '#e6f0fa',
@@ -335,10 +361,11 @@ export const getDashboardStyles = (isMobile, isSidebarOpen, isSidebarCollapsed) 
     backgroundColor: 'rgba(0, 51, 102, 0.7)',
     display: 'flex',
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: isMobile ? 'flex-start' : 'center',
     zIndex: 1000,
     backdropFilter: 'blur(4px)',
-    padding: isMobile ? '15px' : '0',
+    padding: isMobile ? '12px' : '0',
+    overflowY: 'auto',
   },
   modalContent: {
     backgroundColor: 'white',
@@ -349,12 +376,14 @@ export const getDashboardStyles = (isMobile, isSidebarOpen, isSidebarCollapsed) 
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
+    maxHeight: isMobile ? 'calc(100vh - 24px)' : '90vh',
   },
   modalHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '20px 30px',
+    gap: '12px',
+    padding: isMobile ? '16px 18px' : '20px 30px',
     backgroundColor: '#fff',
     borderBottom: '1px solid #e2e8f0',
   },
@@ -363,7 +392,7 @@ export const getDashboardStyles = (isMobile, isSidebarOpen, isSidebarCollapsed) 
     flexDirection: isMobile ? 'column' : 'row',
     justifyContent: 'flex-end',
     gap: '12px',
-    padding: '20px 30px',
+    padding: isMobile ? '16px 18px' : '20px 30px',
     backgroundColor: '#f8fafc',
     borderTop: '1px solid #e2e8f0',
   },

@@ -417,12 +417,19 @@ class InternalApplicationDocumentRequirementTests(APITestCase):
             requirements='CV wajib.',
             is_active=True,
         )
+        self.internship_start_date = timezone.localdate()
+        self.internship_end_date = self.internship_start_date + timedelta(days=130)
         self.client.force_authenticate(user=self.student)
 
     def test_student_cannot_apply_internal_vacancy_without_cv(self):
         response = self.client.post(
             '/api/applications/',
-            {'vacancy': self.vacancy.id, 'cover_letter': 'Saya berminat.'},
+            {
+                'vacancy': self.vacancy.id,
+                'cover_letter': 'Saya berminat.',
+                'internship_start_date': self.internship_start_date,
+                'internship_end_date': self.internship_end_date,
+            },
             format='json',
         )
 
@@ -440,7 +447,12 @@ class InternalApplicationDocumentRequirementTests(APITestCase):
 
         response = self.client.post(
             '/api/applications/',
-            {'vacancy': self.vacancy.id, 'cover_letter': 'Saya berminat.'},
+            {
+                'vacancy': self.vacancy.id,
+                'cover_letter': 'Saya berminat.',
+                'internship_start_date': self.internship_start_date,
+                'internship_end_date': self.internship_end_date,
+            },
             format='json',
         )
 
@@ -1074,6 +1086,27 @@ class VacancyNotificationTests(APITestCase):
         self.assertIn('Business Analyst Intern', mail.outbox[0].body)
         self.assertEqual(Notification.objects.filter(student=self.job_seeker).count(), 1)
         self.assertEqual(Notification.objects.filter(student=self.interning_student).count(), 0)
+
+    def test_create_vacancy_without_expiry_date_stays_active(self):
+        response = self.client.post(
+            '/api/vacancies/',
+            {
+                'title': 'Open Ended Intern',
+                'company_name': 'PT Tanpa Deadline',
+                'description': 'Lowongan tanpa batas akhir.',
+                'requirements': 'Mahasiswa aktif.',
+                'notify_job_seekers': False,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(response.data['expires_at'])
+
+        list_response = self.client.get('/api/vacancies/')
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        returned_ids = {item['id'] for item in list_response.data}
+        self.assertIn(response.data['id'], returned_ids)
 
     def test_expired_vacancy_is_not_returned_without_being_deleted(self):
         expired_vacancy = Vacancy.objects.create(

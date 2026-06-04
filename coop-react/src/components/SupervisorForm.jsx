@@ -331,7 +331,7 @@ const styles = {
     minHeight: '100vh',
     backgroundColor: '#f3f6fa',
     fontFamily: '"Inter", "Segoe UI", sans-serif',
-    padding: '28px 18px',
+    padding: 'clamp(14px, 4vw, 28px) clamp(10px, 4vw, 18px)',
     boxSizing: 'border-box',
     color: '#0f172a',
   },
@@ -341,7 +341,7 @@ const styles = {
     margin: '0 auto',
   },
   topHeader: {
-    padding: '20px 24px',
+    padding: 'clamp(16px, 4vw, 20px) clamp(16px, 4vw, 24px)',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -356,6 +356,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '15px',
+    minWidth: 0,
   },
   logo: {
     width: '48px',
@@ -373,7 +374,7 @@ const styles = {
   title: {
     margin: '4px 0 0',
     color: '#0f172a',
-    fontSize: '21px',
+    fontSize: 'clamp(18px, 5vw, 21px)',
     lineHeight: 1.25,
     fontWeight: '800',
   },
@@ -407,7 +408,7 @@ const styles = {
   },
   contentGrid: {
     display: 'grid',
-    gridTemplateColumns: '320px minmax(0, 1fr)',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
     backgroundColor: '#ffffff',
     borderLeft: '1px solid #e2e8f0',
     borderRight: '1px solid #e2e8f0',
@@ -417,7 +418,7 @@ const styles = {
     boxShadow: '0 18px 42px rgba(15, 23, 42, 0.08)',
   },
   summaryPanel: {
-    padding: '28px 24px',
+    padding: 'clamp(20px, 5vw, 28px) clamp(16px, 5vw, 24px)',
     backgroundColor: '#fbfdff',
     borderRight: '1px solid #e2e8f0',
   },
@@ -493,7 +494,7 @@ const styles = {
     fontWeight: '600',
   },
   formPanel: {
-    padding: '30px',
+    padding: 'clamp(20px, 5vw, 30px)',
   },
   formIntro: {
     paddingBottom: '20px',
@@ -502,7 +503,7 @@ const styles = {
   formTitle: {
     margin: '7px 0 0',
     color: '#0f172a',
-    fontSize: '20px',
+    fontSize: 'clamp(18px, 5vw, 20px)',
     lineHeight: 1.35,
     fontWeight: '800',
   },
@@ -552,7 +553,7 @@ const styles = {
   scoreInputShell: {
     display: 'flex',
     alignItems: 'center',
-    minWidth: '180px',
+    minWidth: 'min(100%, 180px)',
     border: '1px solid #cbd5e1',
     borderRadius: '8px',
     backgroundColor: '#ffffff',
@@ -565,7 +566,7 @@ const styles = {
     backgroundColor: '#ffffff',
     border: 'none',
     outline: 'none',
-    fontSize: '22px',
+    fontSize: 'clamp(18px, 6vw, 22px)',
     lineHeight: 1,
     fontWeight: '800',
     boxSizing: 'border-box',
@@ -619,7 +620,7 @@ const styles = {
     resize: 'vertical',
     boxSizing: 'border-box',
     fontFamily: 'inherit',
-    fontSize: '13px',
+    fontSize: '16px',
     lineHeight: 1.65,
   },
   characterCount: {

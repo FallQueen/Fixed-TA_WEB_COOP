@@ -41,6 +41,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import {
+  ADMIN_COOP_CONTACT,
   MIN_INTERNSHIP_WORKING_DAYS,
   calculateWorkingDays,
   getNextDateValue,
@@ -70,9 +71,9 @@ const WITHDRAWABLE_APPLICATION_STATUSES = ['pending', 'reviewed'];
 const getApplicationStatusLabel = (status) => {
   switch (status) {
     case 'pending':
-      return 'Menunggu Review Admin';
+      return 'Menunggu Tindakan Admin';
     case 'reviewed':
-      return 'Sudah Diteruskan ke Perusahaan';
+      return 'Sedang Diproses';
     case 'accepted':
       return 'Diterima Perusahaan';
     case 'withdrawn':
@@ -86,7 +87,7 @@ const getApplicationStatusLabel = (status) => {
 
 const getApplicationStatusStyle = (status) => {
   if (status === 'pending') return { backgroundColor: '#fff7ed', color: '#9a3412' };
-  if (status === 'reviewed') return { backgroundColor: '#e0f2fe', color: '#075985' };
+  if (status === 'reviewed') return { backgroundColor: '#fff7ed', color: '#9a3412' };
   if (status === 'accepted') return { backgroundColor: '#dcfce7', color: '#166534' };
   if (status === 'withdrawn') return { backgroundColor: '#f1f5f9', color: '#475569' };
   if (status === 'rejected') return { backgroundColor: '#fee2e2', color: '#991b1b' };
@@ -126,6 +127,12 @@ const getPlacementDurationText = (placement) => {
 
   return workingDays > 0 ? `${workingDays} hari kerja` : '-';
 };
+
+const getVacancyContact = (vacancy) => ({
+  name: String(vacancy?.supervisor_name || '').trim() || ADMIN_COOP_CONTACT.name,
+  email: String(vacancy?.supervisor_email || '').trim() || ADMIN_COOP_CONTACT.email,
+  phone: String(vacancy?.supervisor_phone || '').trim() || ADMIN_COOP_CONTACT.phone,
+});
 
 const getNotificationMeta = (notificationType) => {
   switch (notificationType) {
@@ -359,7 +366,7 @@ export function SettingsTab({
         <h1 style={styles.heroTitle}>Keamanan & Pengaturan Profil</h1>
         <p style={styles.heroSubtitle}>Kelola identitas login dan kata sandi Anda untuk keamanan akses portal.</p>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '30px', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? '14px' : '30px', alignItems: 'start' }}>
         <div style={styles.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', borderBottom: '1px solid #e2e8f0', paddingBottom: '15px' }}>
             <User size={24} color="#003366" />
@@ -371,7 +378,7 @@ export function SettingsTab({
               <input type="text" required name="username" value={profileForm.username} onChange={handleProfileFormChange} className="input-focus" style={{ ...styles.inputStyle, fontWeight: 'bold', color: '#003366' }} placeholder="Username untuk login" />
               <p style={{ fontSize: '11px', color: '#ef4444', marginTop: '5px' }}>*Gunakan ini sebagai pengganti NIM saat login berikutnya.</p>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '15px' }}>
               <div>
                 <label style={styles.labelStyle}>Nama Depan</label>
                 <input type="text" name="first_name" value={profileForm.first_name} onChange={handleProfileFormChange} className="input-focus" style={styles.inputStyle} />
@@ -449,14 +456,14 @@ export function NotificationsTab({
         <p style={styles.heroSubtitle}>Pantau kabar terbaru dari Admin Unit Co-op dalam satu tempat.</p>
       </div>
 
-      <div style={{ ...styles.card, marginBottom: '20px', padding: isMobile ? '18px' : '22px 24px' }}>
+      <div style={{ ...styles.card, marginBottom: isMobile ? '14px' : '20px', padding: isMobile ? '16px' : '22px 24px' }}>
         <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: '18px' }}>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            <div style={{ minWidth: '120px', paddingRight: '18px', borderRight: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(2, max-content)', gap: '12px' }}>
+            <div style={{ minWidth: isMobile ? 0 : '120px', paddingRight: isMobile ? 0 : '18px', borderRight: isMobile ? 'none' : '1px solid #e2e8f0' }}>
               <div style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '800', textTransform: 'uppercase' }}>Total Pesan</div>
               <strong style={{ display: 'block', marginTop: '6px', color: '#0f172a', fontSize: '26px', lineHeight: 1 }}>{notifications.length}</strong>
             </div>
-            <div style={{ minWidth: '130px' }}>
+            <div style={{ minWidth: isMobile ? 0 : '130px' }}>
               <div style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '800', textTransform: 'uppercase' }}>Perlu Dibaca</div>
               <strong style={{ display: 'block', marginTop: '6px', color: unreadCount > 0 ? '#b45309' : '#047857', fontSize: '26px', lineHeight: 1 }}>{unreadCount}</strong>
             </div>
@@ -546,7 +553,7 @@ export function NotificationsTab({
                     <p style={{ margin: '9px 0 0', color: '#94a3b8', fontSize: '11px', fontWeight: '600' }}>{formatNotificationTime(notification.created_at)}</p>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: isMobile ? 'stretch' : 'center', justifyContent: isMobile ? 'flex-end' : 'center', gap: '7px', paddingLeft: isMobile ? '51px' : '0' }}>
+                <div style={{ display: 'flex', alignItems: isMobile ? 'stretch' : 'center', justifyContent: isMobile ? 'stretch' : 'center', gap: '7px', paddingLeft: 0, flexWrap: isMobile ? 'wrap' : 'nowrap', width: isMobile ? '100%' : 'auto' }}>
                   {externalAction ? (
                     <a
                       href={externalAction.url}
@@ -556,7 +563,7 @@ export function NotificationsTab({
                         if (!notification.is_read) handleMarkNotificationRead(notification.id);
                       }}
                       className="btn-hover"
-                      style={{ ...styles.btnPrimary, padding: '10px 12px', backgroundColor: '#003366', width: isMobile ? '100%' : 'auto', fontSize: '12px', whiteSpace: 'nowrap', textDecoration: 'none' }}
+                      style={{ ...styles.btnPrimary, padding: '10px 12px', backgroundColor: '#003366', width: isMobile ? '100%' : 'auto', flex: isMobile ? '1 0 100%' : '0 0 auto', fontSize: '12px', whiteSpace: 'nowrap', textDecoration: 'none' }}
                     >
                       {externalAction.label} <ExternalLink size={14} />
                     </a>
@@ -565,7 +572,7 @@ export function NotificationsTab({
                       type="button"
                       onClick={() => handleOpenNotification(notification)}
                       className="btn-hover"
-                      style={{ ...styles.btnPrimary, padding: '10px 12px', backgroundColor: '#003366', width: isMobile ? '100%' : 'auto', fontSize: '12px', whiteSpace: 'nowrap' }}
+                      style={{ ...styles.btnPrimary, padding: '10px 12px', backgroundColor: '#003366', width: isMobile ? '100%' : 'auto', flex: isMobile ? '1 0 100%' : '0 0 auto', fontSize: '12px', whiteSpace: 'nowrap' }}
                     >
                       {getNotificationTargetLabel(notification.target_tab)} <ChevronRight size={15} />
                     </button>
@@ -577,7 +584,7 @@ export function NotificationsTab({
                       aria-label="Tandai sebagai dibaca"
                       onClick={() => handleMarkNotificationRead(notification.id)}
                       className="btn-hover"
-                      style={{ width: '38px', height: '38px', borderRadius: '8px', border: '1px solid #bfdbfe', backgroundColor: '#eff6ff', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+                      style={{ width: isMobile ? 'auto' : '38px', flex: isMobile ? '1 1 0' : '0 0 auto', height: '38px', borderRadius: '8px', border: '1px solid #bfdbfe', backgroundColor: '#eff6ff', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
                     >
                       <CheckCircle size={16} />
                     </button>
@@ -588,7 +595,7 @@ export function NotificationsTab({
                     aria-label="Hapus notifikasi"
                     onClick={() => handleDeleteNotification(notification.id)}
                     className="btn-hover"
-                    style={{ width: '38px', height: '38px', borderRadius: '8px', border: '1px solid #fecaca', backgroundColor: '#fff1f2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+                    style={{ width: isMobile ? 'auto' : '38px', flex: isMobile ? '1 1 0' : '0 0 auto', height: '38px', borderRadius: '8px', border: '1px solid #fecaca', backgroundColor: '#fff1f2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -605,6 +612,7 @@ export function NotificationsTab({
 export function VacanciesTab({
   handleWithdrawApplication,
   hasAnyPlacement,
+  isMobile,
   loadingVacancies,
   setSelectedVacancy,
   studentApplications = [],
@@ -675,8 +683,8 @@ export function VacanciesTab({
         </div>
       )}
       {visibleApplications.length > 0 && (
-        <div style={{ ...styles.card, marginBottom: '24px' }}>
-          <h3 style={{ margin: '0 0 14px 0', color: '#003366', fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ ...styles.card, marginBottom: isMobile ? '14px' : '24px' }}>
+          <h3 style={{ margin: '0 0 14px 0', color: '#003366', fontSize: isMobile ? '16px' : '18px', lineHeight: 1.3, fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Briefcase size={18} /> Lamaran Internal Saya
           </h3>
           {withdrawFeedback && (
@@ -691,14 +699,17 @@ export function VacanciesTab({
               const canWithdraw = WITHDRAWABLE_APPLICATION_STATUSES.includes(application.status);
 
               return (
-                <div key={application.id} style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '14px', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-                    <div>
+                <div key={application.id} style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: isMobile ? '13px' : '14px', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                  <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+                    <div style={{ minWidth: 0 }}>
                       <h4 style={{ margin: '0 0 4px 0', color: '#0f172a', fontSize: '14px', fontWeight: '800' }}>
                         {vacancy?.title || 'Lowongan tidak ditemukan'}
                       </h4>
                       <p style={{ margin: 0, color: '#64748b', fontSize: '12px', fontWeight: '700' }}>
                         {vacancy?.company_name || '-'} - Apply {new Date(application.applied_at).toLocaleDateString('id-ID')}
+                      </p>
+                      <p style={{ margin: '5px 0 0', color: '#94a3b8', fontSize: '11px', fontWeight: '800' }}>
+                        Periode: {application.internship_start_date || '-'} - {application.internship_end_date || '-'}
                       </p>
                     </div>
                     <span style={{ ...statusStyle, display: 'inline-flex', alignItems: 'center', borderRadius: '999px', padding: '6px 10px', fontSize: '11px', fontWeight: '800' }}>
@@ -715,7 +726,7 @@ export function VacanciesTab({
                       type="button"
                       className="btn-hover"
                       onClick={() => openWithdrawModal(application)}
-                      style={{ ...styles.btnPrimary, backgroundColor: '#fff', color: '#991b1b', border: '1px solid #fecaca', width: 'fit-content' }}
+                      style={{ ...styles.btnPrimary, backgroundColor: '#fff', color: '#991b1b', border: '1px solid #fecaca', width: isMobile ? '100%' : 'fit-content' }}
                     >
                       <XCircle size={16} /> Tarik Lamaran
                     </button>
@@ -727,19 +738,22 @@ export function VacanciesTab({
         </div>
       )}
       {loadingVacancies ? (
-        <div style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>
+        <div style={{ textAlign: 'center', padding: isMobile ? '36px 18px' : '60px', color: '#64748b' }}>
           <Loader2 size={40} className="animate-spin" style={{ marginBottom: '10px', color: '#003366' }} />
           <p>Memuat daftar peluang magang...</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: isMobile ? '14px' : '24px' }}>
           {vacancies.length === 0 ? (
-            <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px', backgroundColor: 'white', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>
+            <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: isMobile ? '34px 18px' : '60px', backgroundColor: 'white', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>
               <Inbox size={48} color="#94a3b8" style={{ marginBottom: '15px' }} />
               <h3 style={{ margin: '0 0 5px 0', color: '#003366' }}>Belum Ada Lowongan</h3>
               <p style={{ color: '#64748b', fontSize: '15px', margin: 0 }}>Tim admin sedang menyiapkan peluang terbaik untuk Anda. Cek kembali nanti!</p>
             </div>
-          ) : vacancies.map((job) => (
+          ) : vacancies.map((job) => {
+            const contact = getVacancyContact(job);
+
+            return (
             <div key={job.id} className="job-card" style={{ opacity: hasAnyPlacement ? 0.6 : 1 }}>
               <div className="job-card-header">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
@@ -747,13 +761,19 @@ export function VacanciesTab({
                     <Sparkles size={12} /> OPEN INTERNSHIP
                   </span>
                 </div>
-                <h3 style={{ margin: '0 0 8px 0', color: '#003366', fontSize: '20px', lineHeight: '1.3', fontWeight: '700' }}>{job.title}</h3>
+                <h3 style={{ margin: '0 0 8px 0', color: '#003366', fontSize: isMobile ? '18px' : '20px', lineHeight: '1.3', fontWeight: '700', overflowWrap: 'anywhere' }}>{job.title}</h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#475569', fontSize: '14px', fontWeight: '500' }}>
                   <Building2 size={16} /> <span>{job.company_name}</span>
                 </div>
               </div>
               <div className="job-card-body">
                 <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: '#64748b', lineHeight: '1.6', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: 1 }}>{job.description}</p>
+                <div style={{ marginBottom: '18px', padding: '12px', borderRadius: '10px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', display: 'grid', gap: '6px' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }}>Kontak Lowongan</span>
+                  <strong style={{ color: '#003366', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}><UserRound size={13} /> {contact.name}</strong>
+                  <span style={{ color: '#64748b', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', overflowWrap: 'anywhere' }}><Mail size={13} /> {contact.email}</span>
+                  <span style={{ color: '#64748b', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={13} /> {contact.phone}</span>
+                </div>
                 <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '20px', marginTop: 'auto' }}>
                   <button className="btn-hover" onClick={() => setSelectedVacancy(job)} style={{ width: '100%', padding: '12px', backgroundColor: '#fff', color: '#003366', border: '2px solid #003366', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', transition: '0.2s', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onMouseOver={(e) => { e.target.style.backgroundColor = '#003366'; e.target.style.color = '#fff'; }} onMouseOut={(e) => { e.target.style.backgroundColor = '#fff'; e.target.style.color = '#003366'; }}>
                     <Eye size={16} /> Lihat Detail Pekerjaan
@@ -761,7 +781,8 @@ export function VacanciesTab({
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
       {withdrawModal.application && (
@@ -779,7 +800,7 @@ export function VacanciesTab({
               </button>
             </div>
             <form onSubmit={submitWithdrawApplication}>
-              <div style={{ padding: '24px', backgroundColor: '#f8fafc' }}>
+              <div style={{ padding: isMobile ? '18px' : '24px', backgroundColor: '#f8fafc' }}>
                 <div style={{ padding: '14px', borderRadius: '10px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', fontSize: '13px', lineHeight: '1.6', fontWeight: '700', marginBottom: '16px' }}>
                   Setelah ditarik, lamaran ini tidak lagi diproses admin/HRD. Tulis alasan yang jelas supaya admin punya catatan prosesnya.
                 </div>
@@ -800,7 +821,7 @@ export function VacanciesTab({
                   </div>
                 )}
               </div>
-              <div style={{ padding: '18px 24px', display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap', backgroundColor: 'white', borderTop: '1px solid #e2e8f0' }}>
+              <div style={{ padding: isMobile ? '16px 18px' : '18px 24px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap', backgroundColor: 'white', borderTop: '1px solid #e2e8f0' }}>
                 <button
                   type="button"
                   className="btn-hover"
@@ -848,7 +869,23 @@ export function VacancyModal({
   const hasCv = Boolean(userData?.cv_file);
   const hasPortfolio = Boolean(userData?.portofolio_file);
   const missingRequiredDocuments = !hasCv;
-  const isApplyDisabled = submittingApplication || hasAnyPlacement || missingRequiredDocuments;
+  const todayInput = new Date().toISOString().split('T')[0];
+  const minimumApplicationEndDate = getMinimumInternshipEndDate(applicationForm.internship_start_date);
+  const selectedApplicationWorkingDays = calculateWorkingDays(
+    applicationForm.internship_start_date,
+    applicationForm.internship_end_date
+  );
+  const isInternalApplicationPeriodIncomplete = !applicationForm.internship_start_date || !applicationForm.internship_end_date;
+  const isInternalApplicationDurationInvalid = Boolean(
+    applicationForm.internship_start_date
+    && applicationForm.internship_end_date
+    && selectedApplicationWorkingDays < MIN_INTERNSHIP_WORKING_DAYS
+  );
+  const isApplyDisabled = submittingApplication
+    || hasAnyPlacement
+    || missingRequiredDocuments
+    || (isApplying && (isInternalApplicationPeriodIncomplete || isInternalApplicationDurationInvalid));
+  const vacancyContact = getVacancyContact(selectedVacancy);
 
   const handleProceedToApply = () => {
     if (!hasCv) {
@@ -882,7 +919,24 @@ export function VacancyModal({
                   <h3 style={{ margin: 0, color: '#F2A900', fontSize: '16px', fontWeight: '600' }}>{selectedVacancy.company_name}</h3>
                 </div>
               </div>
-              <div style={{ marginBottom: '25px' }}>
+              <div style={{ marginBottom: isMobile ? '18px' : '25px', padding: isMobile ? '14px' : '16px', borderRadius: '12px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                <h4 style={{ color: '#003366', margin: '0 0 12px 0', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '800' }}><UserRound size={17} /> Kontak Lowongan</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: '12px' }}>
+                  <div>
+                    <span style={{ display: 'block', color: '#94a3b8', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }}>Nama</span>
+                    <strong style={{ display: 'block', marginTop: '5px', color: '#334155', fontSize: '13px' }}>{vacancyContact.name}</strong>
+                  </div>
+                  <div>
+                    <span style={{ display: 'block', color: '#94a3b8', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }}>Email</span>
+                    <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px', color: '#334155', fontSize: '13px', overflowWrap: 'anywhere' }}><Mail size={14} /> {vacancyContact.email}</strong>
+                  </div>
+                  <div>
+                    <span style={{ display: 'block', color: '#94a3b8', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }}>WhatsApp</span>
+                    <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px', color: '#334155', fontSize: '13px' }}><Phone size={14} /> {vacancyContact.phone}</strong>
+                  </div>
+                </div>
+              </div>
+              <div style={{ marginBottom: isMobile ? '18px' : '25px' }}>
                 <h4 style={{ color: '#003366', margin: '0 0 10px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}><FileText size={18} /> Deskripsi Pekerjaan</h4>
                 <p style={{ whiteSpace: 'pre-line', color: '#475569', lineHeight: '1.7', margin: 0, fontSize: '14px' }}>{selectedVacancy.description}</p>
               </div>
@@ -920,7 +974,7 @@ export function VacancyModal({
                   </div>
                 </div>
               )}
-              <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+              <div style={{ backgroundColor: '#fff', padding: isMobile ? '16px' : '20px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: isMobile ? '14px' : '20px' }}>
                 <p style={{ margin: '0 0 15px 0', fontSize: '14px', color: '#475569' }}>Kamu akan melamar untuk posisi <strong style={{ color: '#003366' }}>{selectedVacancy.title}</strong> di <strong style={{ color: '#003366' }}>{selectedVacancy.company_name}</strong>.</p>
                 <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: '15px', backgroundColor: '#e6f0fa', padding: '15px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
                   <FileText size={32} color="#003366" />
@@ -932,7 +986,59 @@ export function VacancyModal({
                   </div>
                 </div>
               </div>
-              <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+              <div style={{ backgroundColor: '#fff', padding: isMobile ? '16px' : '20px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: isMobile ? '14px' : '20px' }}>
+                <label style={{ ...styles.labelStyle, fontSize: '14px', color: '#003366', display: 'flex', alignItems: 'center', gap: '7px' }}><Calendar size={16} /> Rencana Periode Magang</label>
+                <p style={{ margin: '0 0 14px 0', fontSize: '12px', color: '#64748b', lineHeight: 1.6 }}>
+                  Isi periode magang yang diajukan ke perusahaan. Sistem menghitung minimal {MIN_INTERNSHIP_WORKING_DAYS} hari kerja.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '14px' }}>
+                  <div>
+                    <label style={styles.labelStyle}>Tanggal Mulai</label>
+                    <input
+                      type="date"
+                      required
+                      min={todayInput}
+                      value={applicationForm.internship_start_date}
+                      onChange={(event) => {
+                        const nextStartDate = event.target.value;
+                        const nextMinimumEndDate = getMinimumInternshipEndDate(nextStartDate);
+                        const shouldResetEndDate = applicationForm.internship_end_date
+                          && nextMinimumEndDate
+                          && applicationForm.internship_end_date < nextMinimumEndDate;
+
+                        setApplicationForm({
+                          ...applicationForm,
+                          internship_start_date: nextStartDate,
+                          internship_end_date: shouldResetEndDate ? '' : applicationForm.internship_end_date,
+                        });
+                      }}
+                      className="input-focus"
+                      style={styles.inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={styles.labelStyle}>Tanggal Selesai</label>
+                    <input
+                      type="date"
+                      required
+                      min={minimumApplicationEndDate || applicationForm.internship_start_date || todayInput}
+                      value={applicationForm.internship_end_date}
+                      onChange={(event) => setApplicationForm({ ...applicationForm, internship_end_date: event.target.value })}
+                      className="input-focus"
+                      style={styles.inputStyle}
+                    />
+                  </div>
+                </div>
+                <div style={{ marginTop: '12px', padding: '12px 14px', borderRadius: '8px', border: isInternalApplicationDurationInvalid ? '1px solid #fecaca' : '1px solid #bfdbfe', backgroundColor: isInternalApplicationDurationInvalid ? '#fef2f2' : '#eff6ff', color: isInternalApplicationDurationInvalid ? '#991b1b' : '#1d4ed8', fontSize: '12px', lineHeight: '1.5', fontWeight: '700' }}>
+                  {applicationForm.internship_start_date && minimumApplicationEndDate
+                    ? `Tanggal selesai paling cepat: ${minimumApplicationEndDate}.`
+                    : 'Pilih tanggal mulai untuk melihat batas tanggal selesai.'}
+                  {applicationForm.internship_start_date && applicationForm.internship_end_date
+                    ? ` Durasi pilihan saat ini: ${selectedApplicationWorkingDays} hari kerja.`
+                    : ''}
+                </div>
+              </div>
+              <div style={{ backgroundColor: '#fff', padding: isMobile ? '16px' : '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                 <label style={{ ...styles.labelStyle, fontSize: '14px', color: '#003366' }}>Pesan Tambahan / Cover Letter (Opsional)</label>
                 <p style={{ margin: '0 0 10px 0', fontSize: '12px', color: '#64748b' }}>Ceritakan sedikit kenapa kamu cocok untuk posisi ini agar Admin & HRD tertarik dengan profilmu.</p>
                 <textarea autoFocus rows="6" placeholder="Yth. Bapak/Ibu HRD, Saya sangat tertarik..." className="input-focus" style={{ ...styles.inputStyle, resize: 'vertical' }} value={applicationForm.cover_letter} onChange={(e) => setApplicationForm({ ...applicationForm, cover_letter: e.target.value })} />
@@ -943,7 +1049,7 @@ export function VacancyModal({
         <div style={styles.modalFooter}>
           {!isApplying ? (
             <>
-              <button type="button" className="btn-hover" onClick={closeModal} style={{ ...styles.btnPrimary, backgroundColor: '#f1f5f9', color: '#475569', padding: '12px 20px', border: '1px solid #cbd5e1' }}>Batal</button>
+              <button type="button" className="btn-hover" onClick={closeModal} style={{ ...styles.btnPrimary, backgroundColor: '#f1f5f9', color: '#475569', padding: '12px 20px', border: '1px solid #cbd5e1', order: isMobile ? 2 : 0 }}>Batal</button>
               {selectedVacancy.external_apply_link ? (
                 hasAnyPlacement ? (
                   <button disabled style={{ ...styles.btnPrimary, padding: '12px 30px', fontSize: '15px', backgroundColor: '#94a3b8', cursor: 'not-allowed', boxShadow: 'none' }}>
@@ -1017,6 +1123,7 @@ export function PlacementReportTab({
   handleRequestSupervisorChange,
   hasApprovedPlacement,
   hasPendingPlacement,
+  isMobile,
   placementForm,
   setAcceptanceLetter,
   setPlacementForm,
@@ -1172,7 +1279,7 @@ export function PlacementReportTab({
 
   return (
     <div className="no-print">
-      <div style={{ maxWidth: '1120px', margin: '0 auto' }}>
+      <div style={{ maxWidth: isMobile ? '100%' : '1120px', margin: '0 auto' }}>
         <div style={styles.heroBanner}>
           <h1 style={styles.heroTitle}>{hasApprovedPlacement ? 'Pengajuan Pindah Tempat Magang' : 'Input Data Magang'}</h1>
           <p style={styles.heroSubtitle}>{hasApprovedPlacement ? 'Gunakan form ini HANYA jika Anda ingin pindah tempat kerja. Data magang saat ini akan diarsipkan.' : 'Daftarkan tempat magang yang Anda dapatkan di luar bursa resmi kami.'}</p>
@@ -1180,7 +1287,7 @@ export function PlacementReportTab({
         <div style={styles.card}>
         {hasApprovedPlacement && currentPlacement && (
           <div style={{ marginBottom: '24px', border: '1px solid #bfdbfe', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
-            <div style={{ padding: '15px 17px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap', backgroundColor: '#eff6ff', borderBottom: '1px solid #bfdbfe' }}>
+            <div style={{ padding: isMobile ? '14px' : '15px 17px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', gap: '14px', backgroundColor: '#eff6ff', borderBottom: '1px solid #bfdbfe' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
                 <div style={{ width: '38px', height: '38px', borderRadius: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffffff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
                   <UserRound size={19} />
@@ -1195,12 +1302,12 @@ export function PlacementReportTab({
                 onClick={openSupervisorChangeModal}
                 disabled={supervisorChangePending}
                 className="btn-hover"
-                style={{ ...styles.btnPrimary, padding: '10px 13px', backgroundColor: supervisorChangePending ? '#cbd5e1' : '#003366', cursor: supervisorChangePending ? 'not-allowed' : 'pointer', fontSize: '12px', width: 'auto' }}
+                style={{ ...styles.btnPrimary, padding: '10px 13px', backgroundColor: supervisorChangePending ? '#cbd5e1' : '#003366', cursor: supervisorChangePending ? 'not-allowed' : 'pointer', fontSize: '12px', width: isMobile ? '100%' : 'auto' }}
               >
                 <Edit size={14} /> {supervisorChangeRejected ? 'Perbaiki Pengajuan' : 'Ajukan Perubahan'}
               </button>
             </div>
-            <div style={{ padding: '15px 17px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '13px' }}>
+            <div style={{ padding: isMobile ? '14px' : '15px 17px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(190px, 1fr))', gap: '13px' }}>
               <div>
                 <span style={{ display: 'block', color: '#94a3b8', fontSize: '10px', fontWeight: '800', textTransform: 'uppercase' }}>Nama Supervisor</span>
                 <strong style={{ display: 'block', marginTop: '5px', color: '#334155', fontSize: '13px' }}>{currentPlacement.supervisor_name}</strong>
@@ -1247,7 +1354,7 @@ export function PlacementReportTab({
           </div>
         )}
         <form onSubmit={handlePlacementFormSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px', marginBottom: '22px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px', marginBottom: '22px' }}>
             {[
               { number: '01', label: 'Data Perusahaan', icon: Building2 },
               { number: '02', label: 'Kontak Supervisor', icon: UserRound },
@@ -1267,8 +1374,8 @@ export function PlacementReportTab({
             })}
           </div>
           {activeInternalApplications.length > 0 && (
-            <div style={{ marginBottom: '26px', overflow: 'hidden', borderRadius: '18px', border: '1px solid #fed7aa', backgroundColor: '#fff7ed', boxShadow: '0 18px 40px rgba(154, 52, 18, 0.10)' }}>
-              <div style={{ padding: '18px 20px', display: 'flex', alignItems: 'flex-start', gap: '14px', borderBottom: '1px solid #fed7aa', background: 'linear-gradient(135deg, #fff7ed 0%, #fffbeb 100%)' }}>
+            <div style={{ marginBottom: '26px', overflow: 'hidden', borderRadius: isMobile ? '14px' : '18px', border: '1px solid #fed7aa', backgroundColor: '#fff7ed', boxShadow: '0 18px 40px rgba(154, 52, 18, 0.10)' }}>
+              <div style={{ padding: isMobile ? '16px' : '18px 20px', display: 'flex', alignItems: 'flex-start', gap: '14px', borderBottom: '1px solid #fed7aa', background: 'linear-gradient(135deg, #fff7ed 0%, #fffbeb 100%)' }}>
                 <div style={{ width: '42px', height: '42px', borderRadius: '14px', backgroundColor: '#ffedd5', border: '1px solid #fdba74', color: '#9a3412', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <ShieldAlert size={22} />
                 </div>
@@ -1285,7 +1392,7 @@ export function PlacementReportTab({
                   </p>
                 </div>
               </div>
-              <div style={{ padding: '18px 20px', display: 'grid', gap: '14px' }}>
+              <div style={{ padding: isMobile ? '16px' : '18px 20px', display: 'grid', gap: '14px' }}>
                 <div style={{ display: 'grid', gap: '10px' }}>
                   {activeInternalApplications.map((application) => {
                     const vacancy = application.vacancy?.id
@@ -1294,7 +1401,7 @@ export function PlacementReportTab({
                     const statusStyle = getApplicationStatusStyle(application.status);
 
                     return (
-                      <div key={application.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', flexWrap: 'wrap', padding: '13px 14px', borderRadius: '13px', backgroundColor: '#ffffff', border: '1px solid #fed7aa' }}>
+                      <div key={application.id} style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', gap: '10px', padding: '13px 14px', borderRadius: '13px', backgroundColor: '#ffffff', border: '1px solid #fed7aa' }}>
                         <div style={{ minWidth: 0 }}>
                           <strong style={{ display: 'block', color: '#0f172a', fontSize: '13px', fontWeight: '900', marginBottom: '4px' }}>
                             {vacancy?.title || 'Lowongan internal'}
@@ -1318,7 +1425,7 @@ export function PlacementReportTab({
                     type="button"
                     onClick={onOpenVacanciesTab}
                     className="btn-hover"
-                    style={{ ...styles.btnPrimary, backgroundColor: '#F2A900', color: '#003366', boxShadow: '0 10px 20px rgba(242, 169, 0, 0.25)', width: 'auto' }}
+                    style={{ ...styles.btnPrimary, backgroundColor: '#F2A900', color: '#003366', boxShadow: '0 10px 20px rgba(242, 169, 0, 0.25)', width: isMobile ? '100%' : 'auto' }}
                   >
                     <Briefcase size={16} /> Buka Bursa Magang
                   </button>
@@ -1391,9 +1498,9 @@ export function PlacementReportTab({
             <div><label style={styles.labelStyle}>No. WhatsApp Supervisor</label><input type="text" name="supervisor_phone" value={placementForm.supervisor_phone} onChange={(e) => setPlacementForm({ ...placementForm, supervisor_phone: e.target.value })} className="input-focus" style={styles.inputStyle} placeholder="Cth: 08123456789" /></div>
           </div>
           <h4 style={styles.sectionTitle}>3. Dokumen Validasi (Letter of Acceptance)</h4>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px dashed #cbd5e1', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', gap: '14px', backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px dashed #cbd5e1', flexWrap: 'wrap' }}>
             <div style={{ width: '42px', height: '42px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#003366', backgroundColor: '#e6f0fa', flexShrink: 0 }}><UploadCloud size={20} /></div>
-            <div style={{ flex: 1, minWidth: '220px' }}>
+            <div style={{ flex: 1, minWidth: isMobile ? 0 : '220px' }}>
               <label style={{ ...styles.labelStyle, marginBottom: '3px' }}>Surat Diterima Magang / Offering Letter</label>
               <p style={{ margin: '0 0 9px', color: '#64748b', fontSize: '11px', lineHeight: 1.5 }}>Gunakan dokumen PDF atau gambar yang dapat dibaca dengan jelas.</p>
               <input type="file" accept=".pdf,image/*" required onChange={(e) => setAcceptanceLetter(e.target.files[0])} style={{ ...styles.fileInput, marginTop: 0, backgroundColor: '#fff' }} />
@@ -1409,19 +1516,19 @@ export function PlacementReportTab({
         <div style={styles.modalOverlay}>
           <div style={{ ...styles.modalContent, maxWidth: '610px' }}>
             <div style={styles.modalHeader}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '11px', minWidth: 0 }}>
                 <div style={{ width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '9px', color: '#1d4ed8', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
                   <RefreshCw size={18} />
                 </div>
-                <div>
-                  <h2 style={{ margin: 0, color: '#0f172a', fontSize: '18px', fontWeight: '800' }}>Ajukan Perubahan Supervisor</h2>
+                <div style={{ minWidth: 0 }}>
+                  <h2 style={{ margin: 0, color: '#0f172a', fontSize: isMobile ? '16px' : '18px', lineHeight: 1.3, fontWeight: '800' }}>Ajukan Perubahan Supervisor</h2>
                   <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '12px' }}>Admin akan memeriksa data sebelum email tujuan evaluasi diganti.</p>
                 </div>
               </div>
               <button type="button" onClick={closeSupervisorChangeModal} style={styles.closeBtn} aria-label="Tutup form perubahan supervisor"><XCircle size={22} /></button>
             </div>
             <form onSubmit={submitSupervisorChange}>
-              <div style={{ padding: '22px 24px', display: 'grid', gap: '16px' }}>
+              <div style={{ padding: isMobile ? '18px' : '22px 24px', display: 'grid', gap: '16px' }}>
                 <div>
                   <label style={styles.labelStyle}>Nama Lengkap Supervisor</label>
                   <input type="text" required value={supervisorChangeModal.supervisor_name} onChange={(event) => setSupervisorChangeModal({ ...supervisorChangeModal, supervisor_name: event.target.value })} className="input-focus" style={styles.inputStyle} />
@@ -1471,9 +1578,12 @@ export function WeeklyProgressTab({
         <h1 style={styles.heroTitle}>Progress Pencarian Magang</h1>
         <p style={styles.heroSubtitle}>Laporkan upaya mingguan Anda agar Dosen Pembimbing dapat memantau dan memberikan arahan.</p>
       </div>
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '30px', alignItems: 'flex-start' }}>
-        <div style={{ ...styles.card, flex: 1, width: isMobile ? 'auto' : '100%', position: isMobile ? 'static' : 'sticky', top: '20px', borderTop: '4px solid #003366' }}>
-          <h3 style={{ margin: '0 0 20px 0', color: '#003366', fontSize: '18px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}><Edit3 size={20} /> Buat Laporan Baru</h3>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '14px' : '30px', alignItems: 'flex-start' }}>
+        <div style={{ ...styles.card, flex: 1, width: '100%', position: isMobile ? 'static' : 'sticky', top: '20px', borderTop: '4px solid #003366' }}>
+          <div style={{ marginBottom: isMobile ? '18px' : '25px', borderBottom: '1px solid #e2e8f0', paddingBottom: '15px' }}>
+            <h3 style={{ margin: 0, color: '#003366', fontSize: '18px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}><Edit3 size={20} /> Buat Laporan Baru</h3>
+            <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: '12px', lineHeight: 1.5 }}>Isi progres pencarian magang mingguan dan rencana tindak lanjut berikutnya.</p>
+          </div>
           <form onSubmit={(e) => handleWeeklySubmit(e, weeklyForm)} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
             <div><label style={styles.labelStyle}>Minggu Ke-</label><input type="text" name="week_number" placeholder="Contoh: Minggu 1 (Awal Maret)" required onChange={(e) => setWeeklyForm({ ...weeklyForm, week_number: e.target.value })} value={weeklyForm.week_number} className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc' }} /></div>
             <div><label style={styles.labelStyle}>Perusahaan yang Dilamar (Apply)</label><textarea name="companies_applied" rows="3" placeholder="Sebutkan nama perusahaan dan posisinya..." required onChange={(e) => setWeeklyForm({ ...weeklyForm, companies_applied: e.target.value })} value={weeklyForm.companies_applied} className="input-focus" style={{ ...styles.inputStyle, backgroundColor: '#f8fafc', resize: 'vertical' }} /></div>
@@ -1485,20 +1595,20 @@ export function WeeklyProgressTab({
             </button>
           </form>
         </div>
-        <div style={{ ...styles.card, flex: 1, width: isMobile ? 'auto' : '100%' }}>
-          <h3 style={{ margin: '0 0 25px 0', color: '#003366', fontSize: '18px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}><History size={20} /> Rekam Jejak (Timeline)</h3>
+        <div style={{ ...styles.card, flex: 1, width: '100%' }}>
+          <h3 style={{ margin: '0 0 25px 0', color: '#003366', fontSize: '18px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}><History size={20} /> Rekam Jejak Mingguan</h3>
           {weeklyReports.length === 0 ? (
             <div style={{ padding: '30px', backgroundColor: '#f8fafc', borderRadius: '12px', textAlign: 'center', color: '#64748b', border: '1px dashed #cbd5e1' }}>
               <BarChart2 size={40} color="#cbd5e1" style={{ marginBottom: '10px' }} />
               <p style={{ margin: 0 }}>Belum ada riwayat laporan.<br />Mulai laporkan progress pertama Anda!</p>
             </div>
           ) : (
-            <div style={{ paddingLeft: '5px' }}>
+            <div style={isMobile ? { display: 'flex', flexDirection: 'column', gap: '15px' } : { paddingLeft: '5px' }}>
               {weeklyReports.map((report) => (
-                <div key={report.id} className="timeline-item">
-                  <div className="timeline-dot"></div>
-                  <div style={{ padding: '20px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
-                    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px', gap: isMobile ? '5px' : '0' }}>
+                <div key={report.id} className={isMobile ? undefined : 'timeline-item'} style={isMobile ? { padding: '15px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' } : undefined}>
+                  {!isMobile && <div className="timeline-dot"></div>}
+                  <div style={isMobile ? {} : { padding: '20px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px', gap: isMobile ? '6px' : '0' }}>
                       <h4 style={{ margin: 0, color: '#003366', fontSize: '16px', fontWeight: '700' }}>{report.week_number}</h4>
                       <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', backgroundColor: '#f8fafc', padding: '4px 8px', borderRadius: '4px' }}>{formatSubmissionDate(report.submitted_at)}</span>
                     </div>
@@ -1543,14 +1653,14 @@ export function MonthlyReportsTab({
         <h1 style={styles.heroTitle}>Laporan Kemajuan Bulanan</h1>
         <p style={styles.heroSubtitle}>Catat pekerjaan, pembelajaran, dan perkembangan magang secara berkala.</p>
       </div>
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '30px', alignItems: 'flex-start' }}>
-        <div style={{ ...styles.card, flex: 1.5, width: isMobile ? 'auto' : '100%', borderTop: editingReportId ? '4px solid #0ea5e9' : '4px solid #003366' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', borderBottom: '1px solid #e2e8f0', paddingBottom: '15px' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '14px' : '30px', alignItems: 'flex-start' }}>
+        <div style={{ ...styles.card, flex: 1.5, width: '100%', borderTop: editingReportId ? '4px solid #0ea5e9' : '4px solid #003366' }}>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: '12px', marginBottom: isMobile ? '18px' : '25px', borderBottom: '1px solid #e2e8f0', paddingBottom: '15px' }}>
             <div>
               <h3 style={{ margin: 0, color: '#003366', fontSize: '18px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}><Edit3 size={20} /> {editingReportId ? 'Mode Revisi Laporan' : 'Buat Laporan Baru'}</h3>
               <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: '12px', lineHeight: 1.5 }}>{editingReportId ? 'Perbarui jawaban yang perlu disesuaikan lalu simpan revisi.' : 'Isi satu laporan untuk setiap bulan masa magang.'}</p>
             </div>
-            {editingReportId && <button type="button" onClick={cancelEditMonthlyReport} style={{ padding: '7px 10px', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}><XCircle size={14} /> Batal</button>}
+            {editingReportId && <button type="button" onClick={cancelEditMonthlyReport} style={{ padding: '9px 11px', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', whiteSpace: 'nowrap', width: isMobile ? '100%' : 'auto' }}><XCircle size={14} /> Batal</button>}
           </div>
           <form onSubmit={(e) => handleReportSubmit(e, editingReportId, reportForm)}>
             <div style={{ backgroundColor: '#e6f0fa', padding: '20px', borderRadius: '8px', marginBottom: '25px' }}>
@@ -1595,7 +1705,7 @@ export function MonthlyReportsTab({
             </div>
           </form>
         </div>
-        <div style={{ ...styles.card, flex: 1, width: isMobile ? 'auto' : '100%', position: isMobile ? 'static' : 'sticky', top: '20px' }}>
+        <div style={{ ...styles.card, flex: 1, width: '100%', position: isMobile ? 'static' : 'sticky', top: '20px' }}>
           <h3 style={{ margin: '0 0 25px 0', color: '#003366', fontSize: '18px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}><History size={20} /> Rekam Jejak Bulanan</h3>
           {monthlyReports.length === 0 ? (
             <div style={{ padding: '30px', backgroundColor: '#f8fafc', borderRadius: '12px', textAlign: 'center', color: '#64748b', border: '1px dashed #cbd5e1' }}>
@@ -1606,12 +1716,12 @@ export function MonthlyReportsTab({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               {monthlyReports.map((report) => (
                 <div key={report.id} style={{ padding: '15px', backgroundColor: '#fff', borderRadius: '12px', border: editingReportId === report.id ? '2px solid #0ea5e9' : '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'flex-start', gap: '10px', marginBottom: '10px' }}>
                     <div>
                       <h4 style={{ margin: '0 0 4px 0', color: '#003366', fontSize: '15px', fontWeight: '700' }}>{report.report_month}</h4>
                       <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>Dikirim: {formatSubmissionDate(report.submitted_at)}</span>
                     </div>
-                    <button onClick={() => handleEditMonthlyReport(report)} style={{ padding: '6px 10px', backgroundColor: editingReportId === report.id ? '#0ea5e9' : '#f1f5f9', color: editingReportId === report.id ? '#fff' : '#003366', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <button onClick={() => handleEditMonthlyReport(report)} style={{ padding: '8px 10px', backgroundColor: editingReportId === report.id ? '#0ea5e9' : '#f1f5f9', color: editingReportId === report.id ? '#fff' : '#003366', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', width: isMobile ? '100%' : 'auto' }}>
                       <Edit size={12} /> {editingReportId === report.id ? 'Mengedit...' : 'Revisi'}
                     </button>
                   </div>
@@ -1695,16 +1805,40 @@ export function SubmissionReportTab({
             <h1 style={styles.heroTitle}>{title}</h1>
             <p style={{ ...styles.heroSubtitle, maxWidth: '760px' }}>{submittedDescription}</p>
           </div>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '8px 12px', borderRadius: '999px', backgroundColor: submittedReport ? '#ecfdf5' : '#fff7ed', color: submittedReport ? '#047857' : '#c2410c', fontSize: '11px', fontWeight: '900', border: `1px solid ${submittedReport ? '#bbf7d0' : '#fed7aa'}` }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: isMobile ? '100%' : 'auto' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px', padding: '8px 12px', borderRadius: '999px', backgroundColor: submittedReport ? '#ecfdf5' : '#fff7ed', color: submittedReport ? '#047857' : '#c2410c', fontSize: '11px', fontWeight: '900', border: `1px solid ${submittedReport ? '#bbf7d0' : '#fed7aa'}`, flex: isMobile ? '1 1 150px' : '0 0 auto' }}>
               {submittedReport ? <CheckCircle size={13} /> : <Clock size={13} />} {reportStatusLabel}
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '8px 12px', borderRadius: '999px', backgroundColor: evaluation?.is_filled ? '#ecfdf5' : '#fffbeb', color: evaluation?.is_filled ? '#047857' : '#b45309', fontSize: '11px', fontWeight: '900', border: `1px solid ${evaluation?.is_filled ? '#bbf7d0' : '#fde68a'}` }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px', padding: '8px 12px', borderRadius: '999px', backgroundColor: evaluation?.is_filled ? '#ecfdf5' : '#fffbeb', color: evaluation?.is_filled ? '#047857' : '#b45309', fontSize: '11px', fontWeight: '900', border: `1px solid ${evaluation?.is_filled ? '#bbf7d0' : '#fde68a'}`, flex: isMobile ? '1 1 150px' : '0 0 auto' }}>
               {evaluation?.is_filled ? <FileCheck size={13} /> : <Clock size={13} />} {supervisorStatusLabel}
             </span>
           </div>
         </div>
       </div>
+
+      {isMobile && templateFile && (
+        <div style={{ marginBottom: '14px' }}>
+          <div style={{ ...styles.card, padding: '18px', border: '1px solid #dbe4ef', backgroundColor: '#ffffff' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '13px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: reportTone.accentSoft, color: reportTone.accentDark, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Download size={20} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <h3 style={{ margin: 0, color: '#0f172a', fontSize: '15px', lineHeight: 1.35, fontWeight: '900' }}>{templateTitle}</h3>
+                <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '12px', lineHeight: 1.55 }}>Format resmi dari Admin Co-op.</p>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px', marginTop: '16px' }}>
+              <button type="button" onClick={(e) => { e.preventDefault(); setPreviewDoc(templateFile); }} className="btn-hover" style={{ ...styles.btnPrimary, backgroundColor: '#ffffff', color: studentButtonTone.primary, border: `1px solid ${studentButtonTone.primaryBorder}`, boxShadow: 'none', width: '100%' }}>
+                <Eye size={15} /> Preview
+              </button>
+              <a href={templateFile} target="_blank" rel="noreferrer" className="btn-hover" style={{ ...styles.btnPrimary, backgroundColor: studentButtonTone.primary, boxShadow: studentButtonTone.primaryShadow, textDecoration: 'none', display: 'flex', textAlign: 'center', width: '100%' }}>
+                <Download size={15} /> Download
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.35fr) minmax(300px, 0.65fr)', gap: '18px', alignItems: 'start' }}>
         <div style={{ ...styles.card, padding: 0, overflow: 'hidden', borderTop: `4px solid ${reportTone.accent}` }}>
@@ -1817,7 +1951,7 @@ export function SubmissionReportTab({
             )}
           </div>
 
-          {templateFile && (
+          {!isMobile && templateFile && (
             <div style={{ ...styles.card, padding: '20px', border: '1px solid #dbe4ef', backgroundColor: '#ffffff' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '13px' }}>
                 <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: reportTone.accentSoft, color: reportTone.accentDark, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

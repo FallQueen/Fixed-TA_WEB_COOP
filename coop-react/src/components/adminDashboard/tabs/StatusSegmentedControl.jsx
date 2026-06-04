@@ -17,7 +17,7 @@ const labelStyle = {
   letterSpacing: '0.8px',
 };
 
-const trackStyle = {
+const trackStyle = (isMobile) => ({
   display: 'inline-flex',
   alignItems: 'center',
   backgroundColor: adminColors.panel,
@@ -25,14 +25,18 @@ const trackStyle = {
   borderRadius: '999px',
   padding: '3px',
   gap: '2px',
-  flexWrap: 'wrap',
-};
+  flexWrap: isMobile ? 'nowrap' : 'wrap',
+  maxWidth: '100%',
+  overflowX: isMobile ? 'auto' : 'visible',
+  WebkitOverflowScrolling: 'touch',
+});
 
-const buttonStyle = (active) => ({
+const buttonStyle = (active, isMobile) => ({
   border: 'none',
   borderRadius: '999px',
   padding: '8px 14px',
   minWidth: '82px',
+  flex: isMobile ? '0 0 auto' : '0 1 auto',
   backgroundColor: active ? adminColors.surface : 'transparent',
   color: active ? stemRed : adminColors.textMuted,
   boxShadow: active ? '0 7px 18px rgba(15, 23, 42, 0.07)' : 'none',
@@ -53,7 +57,7 @@ function StatusSegmentedControl({
   return (
     <div style={wrapStyle(isMobile)}>
       <span style={labelStyle}>{label}</span>
-      <div style={trackStyle}>
+      <div style={trackStyle(isMobile)}>
         {options.map((option) => {
           const active = option.value === '' ? !value : value === option.value;
 
@@ -62,7 +66,7 @@ function StatusSegmentedControl({
               key={option.value || 'all'}
               type="button"
               onClick={() => onChange(option.value)}
-              style={buttonStyle(active)}
+              style={buttonStyle(active, isMobile)}
             >
               {option.label}
             </button>

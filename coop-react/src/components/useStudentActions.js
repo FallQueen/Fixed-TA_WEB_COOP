@@ -195,20 +195,50 @@ function useStudentActions({
       });
       return;
     }
+    if (!applicationForm.internship_start_date || !applicationForm.internship_end_date) {
+      await showAlert({
+        type: 'warning',
+        title: 'Periode Magang Belum Lengkap',
+        message: 'Isi tanggal mulai dan tanggal selesai magang sebelum mengirim lamaran internal.',
+      });
+      return;
+    }
+
+    const selectedWorkingDays = calculateWorkingDays(
+      applicationForm.internship_start_date,
+      applicationForm.internship_end_date
+    );
+    if (selectedWorkingDays < MIN_INTERNSHIP_WORKING_DAYS) {
+      await showAlert({
+        type: 'warning',
+        title: 'Durasi Magang Belum Cukup',
+        message: `Durasi magang minimal ${MIN_INTERNSHIP_WORKING_DAYS} hari kerja. Periode yang kamu pilih baru ${selectedWorkingDays} hari kerja.`,
+      });
+      return;
+    }
 
     setSubmittingApplication(true);
     try {
       await axios.post(
         `${API_BASE_URL}/applications/`,
-        { vacancy: selectedVacancy.id, cover_letter: applicationForm.cover_letter },
+        {
+          vacancy: selectedVacancy.id,
+          cover_letter: applicationForm.cover_letter,
+          internship_start_date: applicationForm.internship_start_date,
+          internship_end_date: applicationForm.internship_end_date,
+        },
         { headers: createAuthHeaders() }
       );
 
       notify({ type: 'success', title: 'Lamaran Berhasil Dikirim', message: 'Admin akan meneruskan data kamu ke perusahaan.' });
       closeModal();
       fetchStudentApplications?.();
-    } catch {
-      notify({ type: 'danger', title: 'Gagal Mengirim Lamaran', message: 'Terjadi kesalahan. Mungkin kamu sudah melamar posisi ini.' });
+    } catch (error) {
+      notify({
+        type: 'danger',
+        title: 'Gagal Mengirim Lamaran',
+        message: getApiErrorMessage(error, 'Terjadi kesalahan. Mungkin kamu sudah melamar posisi ini.'),
+      });
     } finally {
       setSubmittingApplication(false);
     }

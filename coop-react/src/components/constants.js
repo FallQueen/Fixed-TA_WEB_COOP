@@ -1,6 +1,10 @@
 export { API_BASE_URL } from '../api/config';
 
-export const EMPTY_APPLICATION_FORM = { cover_letter: '' };
+export const EMPTY_APPLICATION_FORM = {
+  cover_letter: '',
+  internship_start_date: '',
+  internship_end_date: '',
+};
 export const EMPTY_PROFILE_FORM = { username: '', first_name: '', last_name: '' };
 export const EMPTY_PASSWORD_FORM = { old_password: '', new_password: '', confirm_password: '' };
 export const EMPTY_PLACEMENT_FORM = {
@@ -29,6 +33,12 @@ export const EMPTY_WEEKLY_FORM = {
 export const EMPTY_UTS_REPORT_DATA = { placement: '', description: '' };
 export const EMPTY_FINAL_REPORT_DATA = { placement: '', description: '' };
 export const MIN_INTERNSHIP_WORKING_DAYS = 90;
+
+export const ADMIN_COOP_CONTACT = {
+  name: 'Admin Co-op Prasmul',
+  email: 'coop@prasetiyamulya.ac.id',
+  phone: '+62 851-1751-2341',
+};
 
 export const PLACEMENT_DATA_TABS = ['profil', 'lapor', 'laporan_bulanan', 'laporan_uts', 'laporan_akhir', 'lowongan', 'pengaturan', 'sertifikat'];
 export const REPORT_TEMPLATE_TABS = ['laporan_uts', 'laporan_akhir'];

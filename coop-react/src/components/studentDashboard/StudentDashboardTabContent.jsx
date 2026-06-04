@@ -164,6 +164,7 @@ export default function StudentDashboardTabContent({ actions, data, viewState, f
     return (
       <VacanciesTab
         hasAnyPlacement={hasAnyPlacement}
+        isMobile={isMobile}
         loadingVacancies={loadingVacancies}
         handleWithdrawApplication={handleWithdrawApplication}
         setSelectedVacancy={setSelectedVacancy}
@@ -184,6 +185,7 @@ export default function StudentDashboardTabContent({ actions, data, viewState, f
         hasApprovedPlacement={hasApprovedPlacement}
         hasPendingPlacement={hasPendingPlacement}
         placementForm={placementForm}
+        isMobile={isMobile}
         setAcceptanceLetter={setAcceptanceLetter}
         setPlacementForm={setPlacementForm}
         styles={styles}

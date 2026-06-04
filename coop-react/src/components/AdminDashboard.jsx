@@ -154,6 +154,8 @@ function AdminDashboard() {
     placements,
     evaluations,
     applications,
+    monthlyReports,
+    utsReports,
     finalReports,
     certificates,
     weeklyReports,
@@ -309,6 +311,7 @@ function AdminDashboard() {
       username: adminData.username || '',
       first_name: adminData.first_name || '',
       last_name: adminData.last_name || '',
+      phone_number: adminData.phone_number || '',
     });
   }, [adminData, setProfileForm]);
 

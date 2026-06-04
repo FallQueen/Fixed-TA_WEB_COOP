@@ -9,6 +9,9 @@ import {
   GraduationCap,
   Settings,
 } from 'lucide-react';
+import { ADMIN_COOP_CONTACT } from '../constants';
+
+export { ADMIN_COOP_CONTACT };
 
 export const EMPTY_VACANCY_FORM = {
   title: '',
@@ -17,6 +20,9 @@ export const EMPTY_VACANCY_FORM = {
   requirements: '',
   expires_at: '',
   external_apply_link: '',
+  supervisor_name: '',
+  supervisor_email: '',
+  supervisor_phone: '',
   notify_job_seekers: true,
 };
 
@@ -53,6 +59,7 @@ export const PROFILE_INITIAL_FORM = {
   username: '',
   first_name: '',
   last_name: '',
+  phone_number: '',
 };
 
 export const API_ROUTES = {

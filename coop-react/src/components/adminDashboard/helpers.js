@@ -1,4 +1,5 @@
 import { getMergedProgramStudiOptions } from '../../constants/programStudi';
+import { ADMIN_COOP_CONTACT } from './constants';
 import { getMinimumInternshipEndDate } from '../constants';
 
 export const getPlacementId = (item) => item?.placement?.id || item?.placement;
@@ -252,9 +253,13 @@ export const buildApprovalFormData = () => {
   return formData;
 };
 
-export const buildPlacementFromApplicationData = (studentId, vacancy) => {
-  const today = new Date().toISOString().split('T')[0];
-  const minimumEndDate = getMinimumInternshipEndDate(today);
+export const buildPlacementFromApplicationData = (studentId, vacancy, application = null) => {
+  const fallbackStartDate = new Date().toISOString().split('T')[0];
+  const startDate = application?.internship_start_date || fallbackStartDate;
+  const endDate = application?.internship_end_date || getMinimumInternshipEndDate(startDate);
+  const supervisorName = String(vacancy.supervisor_name || '').trim() || ADMIN_COOP_CONTACT.name;
+  const supervisorEmail = String(vacancy.supervisor_email || '').trim() || ADMIN_COOP_CONTACT.email;
+  const supervisorPhone = String(vacancy.supervisor_phone || '').trim() || ADMIN_COOP_CONTACT.phone;
   const formData = new FormData();
 
   formData.append('student', studentId);
@@ -262,11 +267,11 @@ export const buildPlacementFromApplicationData = (studentId, vacancy) => {
   formData.append('position', vacancy.title);
   formData.append('business_sector', 'Bursa Magang Kampus');
   formData.append('company_address', 'Alamat mengikuti perusahaan');
-  formData.append('start_date', today);
-  formData.append('end_date', minimumEndDate);
-  formData.append('supervisor_name', 'Belum Diisi');
-  formData.append('supervisor_email', 'admin@coop.com');
-  formData.append('supervisor_phone', '-');
+  formData.append('start_date', startDate);
+  formData.append('end_date', endDate);
+  formData.append('supervisor_name', supervisorName);
+  formData.append('supervisor_email', supervisorEmail);
+  formData.append('supervisor_phone', supervisorPhone);
   formData.append('is_approved', 'true');
 
   const dummyPdf = new Blob(['Dokumen otomatis'], { type: 'application/pdf' });
@@ -392,12 +397,12 @@ export const getApplicationsFiltered = (applications, students, vacancies, place
     const vacancy = application.vacancy?.id ? application.vacancy : vacancies.find((item) => item.id === vacancyId);
     const isArchivedApplicant = isStudentInterningOrGraduated(studentId, placements, certificates);
 
+    if (!student || !vacancy || application.is_archived_by_admin) return false;
     if (!matchesStudentProdi(studentId, students, filterProdi)) return false;
     if (!matchesSearchQuery(lowerQuery, student?.first_name, student?.last_name, student?.nim, student?.program_studi, vacancy?.title, vacancy?.company_name)) return false;
     if (isArchivedApplicant) return false;
     if (!filterStatusPelamar) return true;
-    if (filterStatusPelamar === 'review') return application.status === 'pending';
-    if (filterStatusPelamar === 'diteruskan') return application.status === 'reviewed';
+    if (filterStatusPelamar === 'menunggu') return ['pending', 'reviewed'].includes(application.status);
     if (filterStatusPelamar === 'diterima') return application.status === 'accepted';
     if (filterStatusPelamar === 'ditolak') return application.status === 'rejected';
     if (filterStatusPelamar === 'ditarik') return application.status === 'withdrawn';
@@ -717,18 +722,43 @@ export const buildIndustryExportData = (industries) => (
   }))
 );
 
-export const getDashboardBadges = (pendingUsers, placements, evaluations, applications, finalReports, certificates) => ({
+export const getDashboardBadges = (
+  pendingUsers,
+  placements,
+  evaluations,
+  applications,
+  students,
+  vacancies,
+  monthlyReports,
+  utsReports,
+  finalReports,
+  certificates
+) => ({
   approval: pendingUsers.filter((user) => getRegistrationStatus(user) !== 'rejected').length,
   overview: getPendingPlacementApprovals(placements).length,
   evaluasi: getLatestPlacementsByStudent(placements).filter((placement) => !isPlacementEvaluationComplete(evaluations, placement)).length,
   pelamar: applications.filter((application) => {
     const studentId = application.student?.id || application.student;
-    return ['pending', 'withdrawn'].includes(application.status)
+    const vacancyId = application.vacancy?.id || application.vacancy;
+    const student = application.student?.id ? application.student : students.find((item) => item.id === studentId);
+    const vacancy = application.vacancy?.id ? application.vacancy : vacancies.find((item) => item.id === vacancyId);
+
+    return application.status === 'pending'
+      && !application.is_archived_by_admin
+      && Boolean(student)
+      && Boolean(vacancy)
       && !isStudentInterningOrGraduated(studentId, placements, certificates);
   }).length,
   berkas: getLatestPlacementsByStudent(placements).filter((placement) => {
-    const hasFinalReport = finalReports.some((report) => String(getPlacementId(report)) === String(placement.id));
     const hasCertificate = Boolean(getCertificateForPlacement(certificates, placement));
-    return hasFinalReport && !hasCertificate;
+    return !hasCertificate
+      && getCertificateIssueMissingFields(
+        placement,
+        monthlyReports,
+        utsReports,
+        finalReports,
+        evaluations,
+        placements
+      ).length === 0;
   }).length,
 });

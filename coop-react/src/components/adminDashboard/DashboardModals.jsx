@@ -288,6 +288,26 @@ function DashboardModals({
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
+                    <h5 style={{ margin: '0 0 12px 0', color: '#1d4ed8', fontSize: '15px', fontWeight: '900' }}>Periode Magang Diajukan</h5>
+                    <div style={{ display: 'grid', gap: '9px' }}>
+                      <div>
+                        <span style={{ display: 'block', color: '#64748b', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }}>Tanggal Mulai - Selesai</span>
+                        <strong style={{ display: 'block', marginTop: '4px', color: '#0f172a', fontSize: '13px' }}>
+                          {selectedApplication.app.internship_start_date || '-'} - {selectedApplication.app.internship_end_date || '-'}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ display: 'block', color: '#64748b', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }}>Durasi Hari Kerja</span>
+                        <strong style={{ display: 'block', marginTop: '4px', color: '#003366', fontSize: '13px' }}>
+                          {selectedApplication.app.internship_start_date && selectedApplication.app.internship_end_date
+                            ? `${calculateWorkingDays(selectedApplication.app.internship_start_date, selectedApplication.app.internship_end_date)} hari kerja`
+                            : 'Belum ada data periode'}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
                   <div style={{ backgroundColor: '#e0f2fe', padding: '20px', borderRadius: '12px', border: '1px solid #bae6fd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <h5 style={{ margin: '0 0 5px 0', color: '#0369a1', fontSize: '15px', fontWeight: '700' }}>Curriculum Vitae (CV)</h5>
@@ -325,15 +345,14 @@ function DashboardModals({
 
             <div style={{ ...styles.modalFooter, justifyContent: 'space-between', backgroundColor: '#f8fafc' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', width: isMobile ? '100%' : 'auto' }}>
-                <span style={{ fontSize: '14px', color: '#334155', fontWeight: '700' }}>Tindakan HRD:</span>
+                <span style={{ fontSize: '14px', color: '#334155', fontWeight: '700' }}>Status Lamaran:</span>
                 <select
-                  value={selectedApplication.app.status}
+                  value={selectedApplication.app.status === 'reviewed' ? 'pending' : selectedApplication.app.status}
                   onChange={(e) => handleUpdateAppStatus(selectedApplication.app.id, e.target.value)}
                   className="input-focus"
                   style={{ padding: '10px 15px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none', flex: isMobile ? 1 : 'none', fontWeight: '600', color: stemRed }}
                 >
-                  <option value="pending">Menunggu Review</option>
-                  <option value="reviewed">Teruskan ke HRD Perusahaan</option>
+                  <option value="pending">Menunggu Tindakan</option>
                   <option value="accepted">Diterima Perusahaan</option>
                   <option value="rejected">Ditolak Perusahaan</option>
                   <option value="withdrawn">Ditarik Mahasiswa</option>

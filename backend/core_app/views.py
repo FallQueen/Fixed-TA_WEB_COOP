@@ -721,6 +721,9 @@ def send_vacancy_notification_email(vacancy, students):
     if not emails:
         return 0
 
+    contact_name = (vacancy.supervisor_name or 'Admin Co-op Prasmul').strip()
+    contact_email = (vacancy.supervisor_email or 'coop@prasetiyamulya.ac.id').strip()
+    contact_phone = (vacancy.supervisor_phone or '+62 851-1751-2341').strip()
     frontend_base_url = getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173').rstrip('/')
     dashboard_url = f"{frontend_base_url}/dashboard"
     apply_url = vacancy.external_apply_link or dashboard_url
@@ -734,6 +737,9 @@ def send_vacancy_notification_email(vacancy, students):
         f"Batas akhir: {deadline_text}\n\n"
         f"Deskripsi singkat:\n{vacancy.description}\n\n"
         f"Persyaratan:\n{vacancy.requirements}\n\n"
+        f"Kontak: {contact_name}\n"
+        f"Email: {contact_email}\n"
+        f"WhatsApp: {contact_phone}\n\n"
         f"Silakan cek detail dan ajukan lamaran melalui tautan berikut:\n{apply_url}\n\n"
         "Salam,\n"
         "Admin Unit Co-op"
@@ -747,6 +753,70 @@ def send_vacancy_notification_email(vacancy, students):
     )
     email.send(fail_silently=False)
     return len(emails)
+
+
+APPLICATION_STATUS_MESSAGES = {
+    'reviewed': {
+        'title': 'Lamaranmu diteruskan ke perusahaan',
+        'message': 'Lamaran kamu sudah direview Admin Co-op dan diteruskan ke pihak perusahaan.',
+    },
+    'accepted': {
+        'title': 'Lamaranmu diterima perusahaan',
+        'message': 'Selamat! Lamaran kamu telah diterima perusahaan.',
+    },
+    'rejected': {
+        'title': 'Lamaranmu belum diterima',
+        'message': 'Lamaran kamu belum diterima untuk lowongan ini. Tetap pantau peluang magang lain di Portal Co-op.',
+    },
+}
+
+
+def send_application_status_email(application, old_status):
+    student = application.student
+    if not student.email or application.status not in APPLICATION_STATUS_MESSAGES:
+        return False
+
+    status_meta = APPLICATION_STATUS_MESSAGES[application.status]
+    frontend_base_url = getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173').rstrip('/')
+    dashboard_url = f"{frontend_base_url}/dashboard"
+    start_date = application.internship_start_date.strftime('%d %B %Y') if application.internship_start_date else '-'
+    end_date = application.internship_end_date.strftime('%d %B %Y') if application.internship_end_date else '-'
+    old_status_label = dict(Application.STATUS_CHOICES).get(old_status, old_status)
+    subject = f"{status_meta['title']}: {application.vacancy.title}"
+    message = (
+        f"Halo {student.first_name or student.username},\n\n"
+        f"{status_meta['message']}\n\n"
+        f"Lowongan: {application.vacancy.title}\n"
+        f"Perusahaan: {application.vacancy.company_name}\n"
+        f"Periode diajukan: {start_date} - {end_date}\n"
+        f"Status sebelumnya: {old_status_label}\n"
+        f"Status terbaru: {application.get_status_display()}\n\n"
+        f"Silakan cek detailnya melalui Portal Co-op:\n{dashboard_url}\n\n"
+        "Salam,\n"
+        "Admin Unit Co-op"
+    )
+
+    try:
+        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [student.email], fail_silently=False)
+    except Exception:
+        return False
+
+    return True
+
+
+def notify_student_application_status_change(application, old_status):
+    if application.status not in APPLICATION_STATUS_MESSAGES:
+        return
+
+    status_meta = APPLICATION_STATUS_MESSAGES[application.status]
+    create_student_notification(
+        application.student,
+        status_meta['title'],
+        f"{status_meta['message']} Lowongan: {application.vacancy.title} di {application.vacancy.company_name}.",
+        notification_type='application',
+        target_tab='lowongan',
+    )
+    send_application_status_email(application, old_status)
 
 
 def calculate_required_monthly_report_count(start_date, end_date):
@@ -1296,7 +1366,13 @@ class VacancyViewSet(viewsets.ModelViewSet):
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
-        serializer.save(is_active=True)
+        admin_phone = (getattr(self.request.user, 'phone_number', '') or '').strip()
+        serializer.save(
+            is_active=True,
+            supervisor_name=(serializer.validated_data.get('supervisor_name') or 'Admin Co-op Prasmul').strip(),
+            supervisor_email=(serializer.validated_data.get('supervisor_email') or 'coop@prasetiyamulya.ac.id').strip(),
+            supervisor_phone=(serializer.validated_data.get('supervisor_phone') or admin_phone or '+62 851-1751-2341').strip(),
+        )
 
 class ApplicationViewSet(viewsets.ModelViewSet):
     serializer_class = ApplicationSerializer
@@ -1378,18 +1454,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 updated_application.withdrawn_at = None
                 updated_application.save(update_fields=['withdrawal_reason', 'withdrawn_at'])
 
-        if (
-            self.request.user.is_staff
-            and old_status != updated_application.status
-            and updated_application.status == 'accepted'
-        ):
-            create_student_notification(
-                updated_application.student,
-                "Lamaranmu diterima perusahaan",
-                f"Selamat! Lamaran kamu untuk posisi {updated_application.vacancy.title} di {updated_application.vacancy.company_name} telah diterima perusahaan.",
-                notification_type='application',
-                target_tab='lowongan',
-            )
+        if self.request.user.is_staff and old_status != updated_application.status:
+            notify_student_application_status_change(updated_application, old_status)
 
     def destroy(self, request, *args, **kwargs):
         if not request.user.is_staff:

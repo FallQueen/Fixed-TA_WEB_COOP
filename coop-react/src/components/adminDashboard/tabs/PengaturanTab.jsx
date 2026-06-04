@@ -7,6 +7,7 @@ import {
   Link2,
   LockKeyhole,
   Mail,
+  Phone,
   Save,
   ShieldCheck,
   Unlink,
@@ -151,6 +152,23 @@ function PengaturanTab({
                   <label style={styles.labelStyle}>Nama Belakang</label>
                   <input type="text" name="last_name" value={profileForm.last_name} onChange={handleProfileFormChange} className="input-focus" style={{ ...styles.modernInput, backgroundColor: '#ffffff' }} placeholder="Nama Belakang" />
                 </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={styles.labelStyle}>Nomor WhatsApp Admin</label>
+                <div style={{ position: 'relative' }}>
+                  <Phone size={15} color={adminColors.textSubtle} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                  <input
+                    type="text"
+                    name="phone_number"
+                    value={profileForm.phone_number}
+                    onChange={handleProfileFormChange}
+                    className="input-focus"
+                    style={{ ...styles.modernInput, backgroundColor: '#ffffff', paddingLeft: '36px' }}
+                    placeholder="Contoh: +62 851-1751-2341"
+                  />
+                </div>
+                <p style={helperText}>Dipakai sebagai cadangan kontak admin jika nomor WhatsApp Unit Co-op berubah.</p>
               </div>
 
               <button type="submit" disabled={isUpdatingProfile} className="btn-hover" style={compactButton(styles, 'primary', { width: '100%', padding: '11px 14px' })}>

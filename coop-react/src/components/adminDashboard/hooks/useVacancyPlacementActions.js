@@ -140,8 +140,11 @@ export default function useVacancyPlacementActions({
     e.preventDefault();
     setSubmittingVacancy(true);
 
-    const dataToSend = { ...vacancyForm, is_active: true };
-    if (!dataToSend.expires_at) delete dataToSend.expires_at;
+    const dataToSend = {
+      ...vacancyForm,
+      expires_at: vacancyForm.expires_at || null,
+      is_active: true,
+    };
     if (editingVacancyId) delete dataToSend.notify_job_seekers;
 
     try {
@@ -150,6 +153,7 @@ export default function useVacancyPlacementActions({
         setVacancies((prev) => prev.map((job) => (job.id === editingVacancyId ? response.data : job)));
         notify({ type: 'success', title: 'Lowongan Diperbarui', message: 'Informasi lowongan berhasil disimpan.' });
         setEditingVacancyId(null);
+        window.dispatchEvent(new CustomEvent('admin-vacancy-saved'));
       } else {
         const response = await api.post(API_ROUTES.vacancies, dataToSend);
         setVacancies((prev) => [response.data, ...prev]);
@@ -178,6 +182,9 @@ export default function useVacancyPlacementActions({
       requirements: job.requirements,
       expires_at: job.expires_at || '',
       external_apply_link: job.external_apply_link || '',
+      supervisor_name: job.supervisor_name || '',
+      supervisor_email: job.supervisor_email || '',
+      supervisor_phone: job.supervisor_phone || '',
       notify_job_seekers: false,
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -222,7 +229,7 @@ export default function useVacancyPlacementActions({
         const existingPlacement = getLatestPlacementForStudent(placements, student.id);
 
         if (!existingPlacement || ['resigned', 'rejected', 'completed', 'finished'].includes(existingPlacement.status)) {
-          await api.post(API_ROUTES.placements, buildPlacementFromApplicationData(student.id, vacancy));
+          await api.post(API_ROUTES.placements, buildPlacementFromApplicationData(student.id, vacancy, selectedApplication.app));
         } else if (isPendingPlacementApproval(existingPlacement)) {
           await api.patch(`${API_ROUTES.placements}${existingPlacement.id}/`, buildApprovalFormData());
         }
