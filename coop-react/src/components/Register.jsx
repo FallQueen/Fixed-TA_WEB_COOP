@@ -293,7 +293,7 @@ const styles = {
     justifyContent: 'center', 
     padding: 'clamp(16px, 5vw, 40px) 16px',
     fontFamily: '"Inter", "Segoe UI", sans-serif',
-    backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('/bg-kampus.jpg')`,
+    backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('/bg-prasmul2.jpg')`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat',

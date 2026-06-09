@@ -200,7 +200,7 @@ const styles = {
     padding: 'clamp(16px, 5vw, 20px)', 
     fontFamily: '"Inter", "Segoe UI", sans-serif',
     // INI KODE UNTUK BACKGROUND GAMBAR + OVERLAY GELAP 60%
-    backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('/bg-kampus.jpg')`,
+    backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('/bg-prasmul2.jpg')`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat',
