@@ -308,7 +308,7 @@ export const getDefaultEmailContent = (actionType, targetName) => {
     const typeName = actionType === 'send_eval_uts' ? 'Kemajuan (UTS)' : 'Akhir (UAS)';
     return {
       subject: `Permohonan Pengisian Form Evaluasi ${typeName}`,
-      message: `Yth. Bapak/Ibu ${targetName || 'Supervisor'},\n\nMohon kesediaannya mengisi form Evaluasi ${typeName} mahasiswa kami. Tautan: [Otomatis]\n\nTerima kasih,\nAdmin Unit Co-op`,
+      message: `Yth. Bapak/Ibu ${targetName || 'Supervisor'},\n\nMohon kesediaannya mengisi form Evaluasi ${typeName} mahasiswa kami. Silakan klik tombol form evaluasi yang akan ditambahkan otomatis oleh sistem.\n\nTerima kasih,\nAdmin Unit Co-op`,
     };
   }
 

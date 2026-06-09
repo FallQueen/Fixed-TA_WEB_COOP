@@ -2,6 +2,7 @@
 # SEMUA IMPORT YANG DIBUTUHKAN
 # ==========================================
 import secrets
+from html import escape
 from urllib.parse import urlencode
 
 import requests
@@ -18,7 +19,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny, IsAuthenticated 
 from rest_framework.views import APIView 
 from rest_framework.response import Response
-from django.core.mail import EmailMessage, send_mail
+from django.core.mail import EmailMessage, EmailMultiAlternatives, send_mail
 from django.conf import settings
 from django.shortcuts import redirect
 from django.utils import timezone
@@ -532,6 +533,19 @@ def get_supervisor_evaluation_form_url(evaluation):
     return f"{frontend_base_url}/evaluasi/{evaluation.id}"
 
 
+def text_to_email_html(text):
+    blocks = []
+    for block in text.strip().split('\n\n'):
+        lines = [escape(line.strip()) for line in block.splitlines() if line.strip()]
+        if lines:
+            blocks.append(
+                '<p style="margin:0 0 16px 0; color:#334155; font-size:15px; line-height:1.7;">'
+                + '<br>'.join(lines)
+                + '</p>'
+            )
+    return ''.join(blocks)
+
+
 def send_supervisor_evaluation_request_email(evaluation, form_url, request_data=None):
     request_data = request_data or {}
     placement = evaluation.placement
@@ -551,6 +565,12 @@ def send_supervisor_evaluation_request_email(evaluation, form_url, request_data=
         message = custom_message.replace('[Otomatis]', form_url)
         if form_url not in message:
             message = f"{message}\n\nTautan form evaluasi:\n{form_url}"
+        html_message_text = (
+            custom_message
+            .replace('Tautan: [Otomatis]', 'Silakan klik tombol di bawah ini untuk membuka form evaluasi.')
+            .replace('Link: [Otomatis]', 'Silakan klik tombol di bawah ini untuk membuka form evaluasi.')
+            .replace('[Otomatis]', 'Silakan klik tombol di bawah ini untuk membuka form evaluasi.')
+        )
     else:
         message = (
             f"Yth. Bapak/Ibu {supervisor_name},\n\n"
@@ -563,14 +583,51 @@ def send_supervisor_evaluation_request_email(evaluation, form_url, request_data=
             "Terima kasih,\n"
             "Admin Unit Co-op"
         )
+        html_message_text = (
+            f"Yth. Bapak/Ibu {supervisor_name},\n\n"
+            f"Mohon kesediaannya mengisi form Evaluasi {type_label} untuk mahasiswa berikut:\n\n"
+            f"Nama: {student_name}\n"
+            f"NIM: {student.nim or '-'}\n"
+            f"Perusahaan: {placement.company_name}\n"
+            f"Posisi: {placement.position}\n\n"
+            "Silakan klik tombol di bawah ini untuk membuka form evaluasi.\n\n"
+            "Terima kasih,\n"
+            "Admin Unit Co-op"
+        )
 
-    send_mail(
+    escaped_form_url = escape(form_url, quote=True)
+    html_message = (
+        '<div style="margin:0; padding:24px; background-color:#f1f5f9; font-family:Arial, Helvetica, sans-serif;">'
+        '<div style="max-width:620px; margin:0 auto; background-color:#ffffff; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden;">'
+        '<div style="padding:22px 26px; background-color:#b91c1c; color:#ffffff;">'
+        '<h1 style="margin:0; font-size:20px; line-height:1.35;">Permohonan Pengisian Form Evaluasi</h1>'
+        f'<p style="margin:6px 0 0 0; font-size:13px; color:#fee2e2;">Evaluasi {escape(type_label)}</p>'
+        '</div>'
+        '<div style="padding:26px;">'
+        f'{text_to_email_html(html_message_text)}'
+        '<div style="margin:26px 0 22px 0; text-align:center;">'
+        f'<a href="{escaped_form_url}" '
+        'style="display:inline-block; padding:14px 22px; background-color:#b91c1c; color:#ffffff; '
+        'font-size:15px; font-weight:700; text-decoration:none; border-radius:10px;">'
+        'Buka Form Evaluasi'
+        '</a>'
+        '</div>'
+        '<p style="margin:20px 0 0 0; color:#64748b; font-size:12px; line-height:1.6;">'
+        'Email ini dikirim otomatis oleh Sistem Informasi Co-op Prasetiya Mulya.'
+        '</p>'
+        '</div>'
+        '</div>'
+        '</div>'
+    )
+
+    email = EmailMultiAlternatives(
         subject,
         message,
         settings.DEFAULT_FROM_EMAIL,
         [supervisor_email],
-        fail_silently=False,
     )
+    email.attach_alternative(html_message, 'text/html')
+    email.send(fail_silently=False)
 
 
 def send_student_approval_email(user):

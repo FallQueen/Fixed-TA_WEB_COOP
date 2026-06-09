@@ -888,7 +888,7 @@ function DashboardModals({
                 {isSupervisorEvaluationEmail && (
                   <div style={{ marginBottom: '17px', padding: '11px 13px', borderRadius: '10px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', display: 'flex', alignItems: 'center', gap: '9px', fontSize: '11px', fontWeight: '800', lineHeight: 1.5 }}>
                     <Link2 size={15} style={{ flexShrink: 0 }} />
-                    Link form evaluasi akan ditambahkan otomatis saat email dikirim.
+                    Tombol form evaluasi akan ditambahkan otomatis saat email dikirim.
                   </div>
                 )}
                 <div style={{ marginBottom: '17px' }}>
